@@ -47,20 +47,72 @@ async def test_search(headless: bool = False, keyword: str = "美食", limit: in
             print("搜索到 %d 条" % len(results))
             for i, p in enumerate(results, 1):
                 print("  [%d] %s | 作者:%s | 赞:%s" % (i, p.title or "(无标题)", p.author, p.likes))
-                print("Xtoekn", p.xsec_token)
+                print("  xsec_token:", p.xsec_token[:20] + "..." if len(p.xsec_token or "") > 20 else p.xsec_token)
+                print("  post_id:", p.id)
         except Exception as e:
             print("search 出错:", e)
     print("search 跑完.\n")
 
 
+async def test_get_post_detail(
+    headless: bool = False,
+    keyword: str = "美食",
+    limit: int = 3,
+    load_all_comments: bool = False,
+) -> None:
+    """测试 get_post_detail：先 search 拿一条，再拉详情."""
+    browser, platform = _make_platform(headless)
+    async with browser:
+        print("=== 先 search 取一条 ===")
+        try:
+            results = await platform.search(keyword, limit=limit)
+        except Exception as e:
+            print("search 出错，无法继续:", e)
+            return
+        if not results:
+            print("无搜索结果，跳过 get_post_detail")
+            return
+        first = results[0]
+        post_id, xsec_token = first.id, first.xsec_token or ""
+        if not xsec_token:
+            print("第一条无 xsec_token，跳过 get_post_detail")
+            return
+        print("取第一条: id=%s title=%s" % (post_id, (first.title or "(无标题)")[:40]))
+        print("=== get_post_detail(post_id=%s, load_all_comments=%s) ===" % (post_id, load_all_comments))
+        try:
+            post = await platform.get_post_detail(
+                post_id, xsec_token, load_all_comments=load_all_comments
+            )
+            if post:
+                print("详情: title=%s | 作者=%s | 赞=%s | 评论数=%s" % (
+                    (post.title or "(无标题)")[:50], post.author, post.likes, post.comments_count
+                ))
+                if post.content:
+                    print("  content 前 80 字:", (post.content or "")[:80])
+            else:
+                print("get_post_detail 返回 None")
+        except Exception as e:
+            print("get_post_detail 出错:", e)
+    print("get_post_detail 跑完.\n")
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--test", choices=["get_feeds", "search"], default=None,
-                        help="只跑 get_feeds 或 search；不传则两个都跑")
+    parser.add_argument(
+        "--test",
+        choices=["get_feeds", "search", "get_post_detail"],
+        default=None,
+        help="只跑 get_feeds / search / get_post_detail；不传则三个都跑",
+    )
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--limit", type=int, default=5, help="条数，默认 5")
     parser.add_argument("--keyword", type=str, default="美食", help="search 关键词，默认 美食")
+    parser.add_argument(
+        "--load-all-comments",
+        action="store_true",
+        help="get_post_detail 时是否滚动加载全部评论（较慢）",
+    )
     args = parser.parse_args()
 
     async def run():
@@ -68,5 +120,12 @@ if __name__ == "__main__":
             await test_get_feeds(headless=args.headless, limit=args.limit)
         if args.test is None or args.test == "search":
             await test_search(headless=args.headless, keyword=args.keyword, limit=args.limit)
+        if args.test is None or args.test == "get_post_detail":
+            await test_get_post_detail(
+                headless=args.headless,
+                keyword=args.keyword,
+                limit=args.limit,
+                load_all_comments=args.load_all_comments,
+            )
 
     asyncio.run(run())

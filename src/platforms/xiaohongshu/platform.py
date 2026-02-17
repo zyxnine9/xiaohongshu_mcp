@@ -97,6 +97,44 @@ class XiaohongshuPlatform(PlatformBase):
             raw=item,
         )
 
+    def _note_detail_to_post(self, post_id: str, note: dict[str, Any]) -> Post:
+        """将 feed_detail_workflow 返回的 note（noteDetailMap 项）转为 Post."""
+        user = note.get("user") or {}
+        interact = note.get("interactInfo") or {}
+        image_list = note.get("imageList") or []
+        images = [img.get("urlDefault") or img.get("url") or "" for img in image_list if isinstance(img, dict)]
+        images = [u for u in images if u]
+        author = user.get("nickname") or user.get("nickName") or ""
+        author_id = user.get("userId") or ""
+        liked = interact.get("likedCount") or "0"
+        comments = interact.get("commentCount") or "0"
+        shared = interact.get("sharedCount") or "0"
+        try:
+            likes = int(liked) if isinstance(liked, str) else liked
+        except (TypeError, ValueError):
+            likes = 0
+        try:
+            comments_count = int(comments) if isinstance(comments, str) else comments
+        except (TypeError, ValueError):
+            comments_count = 0
+        try:
+            shares = int(shared) if isinstance(shared, str) else shared
+        except (TypeError, ValueError):
+            shares = 0
+        return Post(
+            id=post_id,
+            title=note.get("title") or "",
+            content=note.get("desc") or "",
+            author=author,
+            author_id=author_id,
+            xsec_token="",
+            likes=likes,
+            comments_count=comments_count,
+            shares=shares,
+            images=images,
+            video_url="",
+        )
+
     async def get_feeds(self, limit: int = 20) -> list[Post]:
         """Get feed/recommended list from homepage __INITIAL_STATE__.feed.feeds."""
         page = await self.browser.new_page()
@@ -123,59 +161,23 @@ class XiaohongshuPlatform(PlatformBase):
         xsec_token: str = "",
         load_all_comments: bool = False,
     ) -> Optional[Post]:
-        """Get post detail via feed_detail_workflow; optionally load all comments."""
+        """Get post detail via feed_detail_workflow. Optionally load all comments by scrolling."""
         if not xsec_token:
             return None
         page = await self.browser.new_page()
         try:
-            raw = await feed_detail_workflow.get_feed_detail(
-                page, post_id, xsec_token, load_all_comments=load_all_comments
+            detail = await feed_detail_workflow.get_feed_detail(
+                page,
+                post_id,
+                xsec_token,
+                load_all_comments=load_all_comments,
             )
-            if not raw:
+            if not detail:
                 return None
-            return self._note_detail_to_post(raw.get("note") or {}, post_id, raw)
+            note = detail.get("note") or {}
+            return self._note_detail_to_post(post_id, note)
         finally:
             await page.close()
-
-    def _note_detail_to_post(
-        self, note: dict[str, Any], post_id: str, raw_detail: Optional[dict[str, Any]] = None
-    ) -> Post:
-        """将 feed_detail_workflow 返回的 note 转为 Post（noteDetailMap 单条结构）."""
-        user = note.get("user") or {}
-        interact = note.get("interactInfo") or {}
-        image_list = note.get("imageList") or []
-        images = [img.get("url") or "" for img in image_list if isinstance(img, dict) and img.get("url")]
-        author = user.get("nickname") or user.get("nickName") or ""
-        author_id = user.get("userId") or ""
-        liked = interact.get("likedCount") or "0"
-        comments = interact.get("commentCount") or "0"
-        shared = interact.get("sharedCount") or "0"
-        try:
-            likes = int(liked) if isinstance(liked, str) else liked
-        except (TypeError, ValueError):
-            likes = 0
-        try:
-            comments_count = int(comments) if isinstance(comments, str) else comments
-        except (TypeError, ValueError):
-            comments_count = 0
-        try:
-            shares = int(shared) if isinstance(shared, str) else shared
-        except (TypeError, ValueError):
-            shares = 0
-        return Post(
-            id=note.get("noteId") or post_id,
-            title=note.get("title") or "",
-            content=note.get("desc") or "",
-            author=author,
-            author_id=author_id,
-            xsec_token=note.get("xsecToken") or "",
-            likes=likes,
-            comments_count=comments_count,
-            shares=shares,
-            images=images,
-            video_url=note.get("video", {}).get("url") if isinstance(note.get("video"), dict) else "",
-            raw=raw_detail or note,
-        )
 
     def _user_profile_data_to_user_profile(
         self, user_id: str, data: dict[str, Any]

@@ -1,4 +1,4 @@
-"""小红书固定流程：登录、Feed 列表、搜索、发布、Feed 详情、用户资料等."""
+"""小红书固定流程：登录、Feed 列表、搜索、发布、用户资料、Feed 详情等."""
 from . import (
     feed_detail_workflow,
     feeds_workflow,
