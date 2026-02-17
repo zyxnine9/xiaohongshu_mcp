@@ -1,0 +1,21 @@
+# Data and secrets
+data/
+.env
+*.json
+!pyproject.toml
+!package.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
