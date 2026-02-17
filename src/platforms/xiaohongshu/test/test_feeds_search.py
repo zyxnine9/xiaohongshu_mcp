@@ -9,6 +9,7 @@ _root = Path(__file__).resolve().parent.parent.parent.parent.parent
 sys.path.insert(0, str(_root))
 
 from src.core.browser_manager import BrowserManager
+from src.core.models import PublishContent
 from src.platforms.xiaohongshu import XiaohongshuPlatform
 
 
@@ -127,14 +128,39 @@ async def test_reply(
     print("reply 跑完.\n")
 
 
+async def test_publish(
+    headless: bool = False,
+    title: str = "测试发布",
+    content: str = "这是一条测试笔记，请忽略",
+    images: list[str] | None = None,
+    tags: list[str] | None = None,
+) -> None:
+    """测试 publish：发布图文笔记."""
+    images = images or []
+    tags = tags or ["测试"]
+    if not images:
+        print("请提供 --images（至少一张图片路径），跳过 publish")
+        return
+    browser, platform = _make_platform(headless)
+    async with browser:
+        pub = PublishContent(title=title, content=content, images=images, tags=tags)
+        print("=== publish(title=%r, images=%s) ===" % (title, images))
+        try:
+            result = await platform.publish(pub)
+            print("publish 结果: %s" % (result if result else "失败"))
+        except Exception as e:
+            print("publish 出错:", e)
+    print("publish 跑完.\n")
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--test",
-        choices=["get_feeds", "search", "get_post_detail", "comment", "reply"],
+        choices=["get_feeds", "search", "get_post_detail", "comment", "reply", "publish"],
         default=None,
-        help="只跑 get_feeds / search / get_post_detail / comment / reply；不传则全跑",
+        help="只跑 get_feeds / search / get_post_detail / comment / reply / publish；不传则全跑",
     )
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--limit", type=int, default=5, help="条数，默认 5")
@@ -148,6 +174,14 @@ if __name__ == "__main__":
     )
     parser.add_argument("--comment-id", type=str, default="", help="reply 用的目标评论 id")
     parser.add_argument("--content", type=str, default="测试评论，请忽略", help="comment / reply 用的内容")
+    parser.add_argument(
+        "--images",
+        type=str,
+        nargs="+",
+        default=[],
+        help="publish 用的图片路径列表，如 --images /path/to/img1.jpg /path/to/img2.png",
+    )
+    parser.add_argument("--title", type=str, default="测试发布", help="publish 用的标题")
     args = parser.parse_args()
 
     async def run():
@@ -176,6 +210,13 @@ if __name__ == "__main__":
                 xsec_token=args.xsec_token,
                 comment_id=args.comment_id,
                 content=args.content,
+            )
+        if args.test is None or args.test == "publish":
+            await test_publish(
+                headless=args.headless,
+                title=args.title,
+                content=args.content,
+                images=args.images,
             )
 
     asyncio.run(run())

@@ -1,5 +1,6 @@
 """Xiaohongshu platform adapter - 小红书平台适配器."""
 import asyncio
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -16,6 +17,9 @@ from src.platforms.xiaohongshu.worflow import (
     search_workflow,
     user_profile_workflow,
 )
+
+logger = logging.getLogger(__name__)
+
 
 class XiaohongshuPlatform(PlatformBase):
     """Xiaohongshu (小红书) platform with fixed workflows."""
@@ -228,15 +232,21 @@ class XiaohongshuPlatform(PlatformBase):
     async def publish(
         self, content: PublishContent, schedule_time: Optional[datetime] = None
     ) -> Optional[str]:
-        """Publish post via creator center (init_publish_page + publish_workflow.publish).
-        Returns a sentinel value on success (post_id not available from creator flow), None on failure.
-        """
+        """发布图文笔记，使用创作者中心上传图文流程。成功返回空字符串（无新笔记 ID），失败返回 None。"""
         page = await self.browser.new_page()
         try:
-            if not await publish_workflow.init_publish_page(page):
-                return None
-            ok = await publish_workflow.publish(page, content, schedule_time=schedule_time)
-            return "published" if ok else None
+            await publish_workflow.publish_image_from_content(
+                page,
+                title=content.title,
+                content=content.content,
+                images=content.images,
+                tags=content.tags,
+                schedule_time=schedule_time,
+            )
+            return ""
+        except (ValueError, TimeoutError, RuntimeError) as e:
+            logger.warning("发布失败: %s", e)
+            return None
         finally:
             await page.close()
 
