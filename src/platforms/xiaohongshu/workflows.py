@@ -10,7 +10,7 @@ from typing import Optional
 
 from playwright.async_api import Page
 
-from src.core.types import PublishContent
+from src.core.models import PublishContent
 
 # Human-like delay range (seconds)
 MIN_DELAY = 0.3
@@ -25,25 +25,122 @@ async def _human_delay():
     await asyncio.sleep(_random_delay())
 
 
+# 登录状态判断的选择器（与 xiaohongshu-mcp/login.go 一致）
+LOGIN_STATUS_SELECTOR = ".main-container .user .link-wrapper .channel"
+
+
 async def workflow_check_login(page: Page) -> bool:
-    """Check if user is logged in by looking for login indicators."""
-    base = "https://www.xiaohongshu.com"
+    """Check if user is logged in (same logic as xiaohongshu-mcp CheckLoginStatus)."""
     try:
-        await page.goto(base, wait_until="domcontentloaded", timeout=15000)
-        await _human_delay()
-
-        # 未登录会跳转到登录页或显示登录按钮
-        url = page.url
-        if "login" in url.lower() or "passport" in url.lower():
-            return False
-
-        # 尝试找到用户相关元素（登录后才有）
-        user_elem = await page.query_selector(
-            "text=我的|text=消息|text=发现"
+        await page.goto(
+            "https://www.xiaohongshu.com/explore",
+            wait_until="domcontentloaded",
+            timeout=15000,
         )
-        return user_elem is not None
+        await asyncio.sleep(1)
+
+        # 登录后会出现 .main-container .user .link-wrapper .channel
+        elem = await page.query_selector(LOGIN_STATUS_SELECTOR)
+        return elem is not None
     except Exception:
         return False
+
+
+# 二维码弹窗选择器（与 login.go FetchQrcodeImage 一致）
+QRCODE_IMG_SELECTOR = ".login-container .qrcode-img"
+
+
+async def workflow_fetch_qrcode(page: Page) -> tuple[Optional[str], bool]:
+    """Fetch QR code image src (same logic as login.go FetchQrcodeImage).
+
+    Returns:
+        (qrcode_src, already_logged_in)
+        - If already logged in: ("", True)
+        - If need login: (img_src, False)
+    """
+    try:
+        # 已在 explore 页面，检查是否已登录
+        if await page.query_selector(LOGIN_STATUS_SELECTOR):
+            return "", True
+
+        qr_elem = await page.query_selector(QRCODE_IMG_SELECTOR)
+        if not qr_elem:
+            return None, False
+        src = await qr_elem.get_attribute("src")
+        if not src or not src.strip():
+            return None, False
+        return src.strip(), False
+    except Exception:
+        return None, False
+
+
+def _print_qrcode_in_terminal(src: str) -> None:
+    """Decode QR image and print scannable QR code in terminal."""
+    try:
+        import base64
+        from io import BytesIO
+
+        # 解析 data URL
+        if src.startswith("data:"):
+            # data:image/png;base64,xxxxx
+            parts = src.split(",", 1)
+            if len(parts) != 2:
+                return
+            img_data = base64.b64decode(parts[1])
+        else:
+            # 外部 URL，需要请求 - 暂不支持，回退到提示
+            print("二维码已显示在浏览器中，请扫码登录。")
+            return
+
+        # 用 pyzbar 解码 QR 获取内容
+        try:
+            import os
+            os.environ['DYLD_LIBRARY_PATH'] = '/opt/homebrew/lib'
+            from pyzbar.pyzbar import decode
+            from PIL import Image
+
+            img = Image.open(BytesIO(img_data))
+            decoded = decode(img)
+            if not decoded:
+                print("无法解析二维码，请使用浏览器中的二维码扫码登录。")
+                return
+            qr_content = decoded[0].data.decode("utf-8", errors="ignore")
+        except ImportError:
+            print("提示: 安装 pyzbar 和 Pillow 可在终端显示二维码 (pip install pyzbar Pillow)")
+            print("二维码已显示在浏览器中，请扫码登录。")
+            return
+
+        # 用 qrcode 在终端打印可扫描的二维码
+        try:
+            import qrcode
+
+            qr = qrcode.QRCode(border=1, box_size=1)
+            qr.add_data(qr_content)
+            qr.make()
+            qr.print_ascii(invert=True)
+            print("请使用小红书 APP 扫描上方二维码完成登录。")
+        except ImportError:
+            print("提示: 安装 qrcode 可在终端显示二维码 (pip install qrcode)")
+            print("登录链接:", qr_content[:80] + "..." if len(qr_content) > 80 else qr_content)
+            print("请使用浏览器中的二维码或复制链接到手机打开。")
+    except Exception:
+        print("请在打开的浏览器窗口中扫码登录。")
+
+
+async def workflow_wait_for_login(
+    page: Page,
+    timeout_sec: float = 120,
+    poll_interval_sec: float = 0.5,
+) -> bool:
+    """Wait for login success by polling for LOGIN_STATUS_SELECTOR (same as login.go WaitForLogin)."""
+    import time
+    deadline = time.monotonic() + timeout_sec
+    while time.monotonic() < deadline:
+        elem = await page.query_selector(LOGIN_STATUS_SELECTOR)
+        if elem is not None:
+            return True
+        await asyncio.sleep(poll_interval_sec)
+    return False
 
 
 async def workflow_get_feeds(page: Page, limit: int = 20) -> list[dict]:
@@ -69,7 +166,7 @@ async def workflow_get_feeds(page: Page, limit: int = 20) -> list[dict]:
             try:
                 link = await item.get_attribute("href") or await (
                     await item.query_selector("a[href*='/explore/']")
-                )?.get_attribute("href")
+                ).get_attribute("href")
                 if not link or "/explore/" not in link:
                     continue
 

@@ -7,7 +7,7 @@ from playwright.async_api import Page
 
 from src.core.browser_manager import BrowserManager
 from src.core.llm_client import LLMClient
-from src.core.types import Comment, Post, PublishContent, UserProfile
+from src.core.models import Comment, Post, PublishContent, UserProfile
 
 
 class PlatformBase(ABC):

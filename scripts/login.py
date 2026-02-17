@@ -26,7 +26,7 @@ async def login_xiaohongshu(headless: bool = False) -> None:
     platform = XiaohongshuPlatform(browser, cookies_path=cookies_path)
 
     async with browser:
-        print("正在打开小红书登录页... 请在浏览器中完成登录。")
+        print("正在打开小红书首页... 未登录时将显示二维码，请扫码完成登录。")
         success = await platform.login(headless=headless)
         if success:
             print("登录成功！Cookies 已保存到:", cookies_path)

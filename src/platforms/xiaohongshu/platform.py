@@ -4,16 +4,17 @@ from typing import Optional
 
 from src.core.browser_manager import BrowserManager
 from src.core.llm_client import LLMClient
-from src.core.types import Comment, Post, PublishContent, UserProfile
+from src.core.models import Comment, Post, PublishContent, UserProfile
 from src.platforms.base import PlatformBase
 from src.platforms.xiaohongshu import workflows
+from src.platforms.xiaohongshu.workflows import LOGIN_STATUS_SELECTOR
 
 
 class XiaohongshuPlatform(PlatformBase):
     """Xiaohongshu (小红书) platform with fixed workflows."""
 
     name = "xiaohongshu"
-    base_url = "https://www.xiaohongshu.com"
+    base_url = "https://www.xiaohongshu.com/explore"
 
     def __init__(
         self,
@@ -26,25 +27,44 @@ class XiaohongshuPlatform(PlatformBase):
         self.browser.cookies_path = self.cookies_path
 
     async def login(self, headless: bool = False) -> bool:
-        """Open login page for manual login. Saves cookies after."""
+        """Open explore page for manual login (QR or other). Saves cookies after.
+
+        Logic follows xiaohongshu-mcp/login.go:
+        1. Navigate to /explore -> triggers QR code popup if not logged in
+        2. Wait 2s for page load
+        3. If already logged in, save cookies and return
+        4. Otherwise poll for .main-container .user .link-wrapper .channel
+        """
         import asyncio
+
         page = await self.browser.new_page()
         try:
+            # 导航到首页，未登录时会触发二维码弹窗
             await page.goto(
-                f"{self.base_url}/passport",
+                self.base_url,
                 wait_until="domcontentloaded",
-                timeout=15000,
+                timeout=60000,
             )
-            # 等待用户手动登录（轮询 URL 变化）
-            for _ in range(120):
-                await asyncio.sleep(1)
-                url = page.url
-                if "passport" not in url and "login" not in url.lower():
-                    break
+            await asyncio.sleep(2)
+
+            # 检查是否已经登录（与 login.go 一致：.main-container .user .link-wrapper .channel）
+            if await page.query_selector(LOGIN_STATUS_SELECTOR):
+                await self.browser.save_context_cookies()
+                return True
+
+            # 未登录：获取并打印二维码到终端
+            qr_src, _ = await workflows.workflow_fetch_qrcode(page)
+            if qr_src:
+                workflows._print_qrcode_in_terminal(qr_src)
             else:
-                return False
-            await self.browser.save_context_cookies()
-            return True
+                print("请在浏览器中完成扫码登录...")
+
+            # 等待扫码/登录完成（轮询登录成功元素，同 login.go WaitForLogin）
+            success = await workflows.workflow_wait_for_login(page, timeout_sec=120)
+            if success:
+                await self.browser.save_context_cookies()
+                return True
+            return False
         except Exception:
             return False
         finally:
