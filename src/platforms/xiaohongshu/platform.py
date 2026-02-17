@@ -9,12 +9,12 @@ from src.core.browser_manager import BrowserManager
 from src.core.models import Comment, Post, PublishContent, UserProfile
 from src.platforms.base import PlatformBase
 from src.platforms.xiaohongshu.worflow import (
-    feed_comments_workflow,
-    feed_detail_workflow,
-    feeds_workflow,
-    login_workflow,
-    publish_workflow,
-    search_workflow,
+    feed_comments,
+    feed_detail,
+    feeds,
+    login,
+    publish,
+    search,
     user_profile_workflow,
 )
 
@@ -33,19 +33,19 @@ class XiaohongshuPlatform(PlatformBase):
         page = await self.browser.new_page()
         try:
             # 1. 检查是否已登录（内部会 navigate 到 explore）
-            if await login_workflow.check_login(page):
+            if await login.check_login(page):
                 return True
             # 2. 等待登录弹窗/二维码出现（与 Go 一致：约 2 秒）
             await asyncio.sleep(2)
-            qr_src, already = await login_workflow.fetch_qrcode(page)
+            qr_src, already = await login.fetch_qrcode(page)
             if already:
                 return True
             if not qr_src:
                 return False
             # 3. 在终端打印二维码（可选）
-            login_workflow.print_qrcode_in_terminal(qr_src)
+            login.print_qrcode_in_terminal(qr_src)
             # 4. 轮询等待用户扫码登录（与 Go WaitForLogin 一致：500ms 轮询）
-            ok = await login_workflow.wait_for_login(
+            ok = await login.wait_for_login(
                 page, timeout_sec=120, poll_interval_sec=0.5
             )
             if ok:
@@ -58,7 +58,7 @@ class XiaohongshuPlatform(PlatformBase):
         """Check if currently logged in."""
         page = await self.browser.new_page()
         try:
-            return await login_workflow.check_login(page)
+            return await login.check_login(page)
         finally:
             await page.close()
 
@@ -106,7 +106,7 @@ class XiaohongshuPlatform(PlatformBase):
         """Get feed/recommended list from homepage __INITIAL_STATE__.feed.feeds."""
         page = await self.browser.new_page()
         try:
-            raw_list = await feeds_workflow.get_feeds_list(page)
+            raw_list = await feeds.get_feeds_list(page)
             return [self._feed_dict_to_post(item) for item in raw_list[:limit]]
         finally:
             await page.close()
@@ -115,7 +115,7 @@ class XiaohongshuPlatform(PlatformBase):
         """Search content by keyword via search_workflow."""
         page = await self.browser.new_page()
         try:
-            raw_list = await search_workflow.get_search_feeds_list(
+            raw_list = await search.get_search_feeds_list(
                 page, keyword=keyword, limit=limit
             )
             return [self._feed_dict_to_post(item) for item in raw_list]
@@ -133,7 +133,7 @@ class XiaohongshuPlatform(PlatformBase):
             return None
         page = await self.browser.new_page()
         try:
-            raw = await feed_detail_workflow.get_feed_detail(
+            raw = await feed_detail.get_feed_detail(
                 page, post_id, xsec_token, load_all_comments=load_all_comments
             )
             if not raw:
@@ -235,7 +235,7 @@ class XiaohongshuPlatform(PlatformBase):
         """发布图文笔记，使用创作者中心上传图文流程。成功返回空字符串（无新笔记 ID），失败返回 None。"""
         page = await self.browser.new_page()
         try:
-            await publish_workflow.publish_image_from_content(
+            await publish.publish_image_from_content(
                 page,
                 title=content.title,
                 content=content.content,
@@ -256,7 +256,7 @@ class XiaohongshuPlatform(PlatformBase):
             return False
         page = await self.browser.new_page()
         try:
-            return await feed_comments_workflow.post_comment(
+            return await feed_comments.post_comment(
                 page, post_id, xsec_token, content
             )
         finally:
@@ -274,7 +274,7 @@ class XiaohongshuPlatform(PlatformBase):
             return False
         page = await self.browser.new_page()
         try:
-            return await feed_comments_workflow.reply_to_comment(
+            return await feed_comments.reply_to_comment(
                 page,
                 post_id,
                 xsec_token,

@@ -8,7 +8,7 @@ from typing import Optional
 
 from playwright.async_api import ElementHandle, Page
 
-from .feed_detail_workflow import (
+from .feed_detail import (
     make_feed_detail_url,
     _check_page_accessible,
     _check_end_container,

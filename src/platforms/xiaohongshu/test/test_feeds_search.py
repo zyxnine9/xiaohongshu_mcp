@@ -50,6 +50,7 @@ async def test_search(headless: bool = False, keyword: str = "美食", limit: in
                 print("  [%d] %s | 作者:%s | 赞:%s" % (i, p.title or "(无标题)", p.author, p.likes))
                 print("  xsec_token:", p.xsec_token)
                 print("  post_id:", p.id)
+                print("  author id", p.author_id)
         except Exception as e:
             print("search 出错:", e)
     print("search 跑完.\n")
@@ -128,6 +129,35 @@ async def test_reply(
     print("reply 跑完.\n")
 
 
+async def test_get_user_profile(
+    headless: bool = False,
+    user_id: str = "",
+    xsec_token: str = "",
+) -> None:
+    """测试 get_user_profile：获取用户主页信息，需要 user_id 和 xsec_token（可从 search 结果中的 author 对应帖子获取）."""
+    if not user_id or not xsec_token:
+        print("请提供 --user-id 和 --xsec-token，跳过 get_user_profile")
+        return
+    browser, platform = _make_platform(headless)
+    async with browser:
+        print("=== get_user_profile(user_id=%s) ===" % user_id)
+        try:
+            profile = await platform.get_user_profile(user_id, xsec_token=xsec_token)
+            if profile:
+                print("用户: nickname=%s | bio=%s | 粉丝=%s | 关注=%s | 获赞=%s" % (
+                    profile.nickname,
+                    (profile.bio or "")[:50],
+                    profile.followers,
+                    profile.following,
+                    profile.likes_count,
+                ))
+            else:
+                print("get_user_profile 返回 None")
+        except Exception as e:
+            print("get_user_profile 出错:", e)
+    print("get_user_profile 跑完.\n")
+
+
 async def test_publish(
     headless: bool = False,
     title: str = "测试发布",
@@ -158,15 +188,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--test",
-        choices=["get_feeds", "search", "get_post_detail", "comment", "reply", "publish"],
+        choices=["get_feeds", "search", "get_post_detail", "get_user_profile", "comment", "reply", "publish"],
         default=None,
-        help="只跑 get_feeds / search / get_post_detail / comment / reply / publish；不传则全跑",
+        help="只跑 get_feeds / search / get_post_detail / get_user_profile / comment / reply / publish；不传则全跑",
     )
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--limit", type=int, default=5, help="条数，默认 5")
     parser.add_argument("--keyword", type=str, default="美食", help="search 关键词，默认 美食")
     parser.add_argument("--post-id", type=str, default="", help="get_post_detail / comment / reply 用的笔记 id")
-    parser.add_argument("--xsec-token", type=str, default="", help="get_post_detail / comment / reply 用的 xsec_token")
+    parser.add_argument("--xsec-token", type=str, default="", help="get_post_detail / get_user_profile / comment / reply 用的 xsec_token")
+    parser.add_argument("--user-id", type=str, default="", help="get_user_profile 用的用户 id")
     parser.add_argument(
         "--load-all-comments",
         action="store_true",
@@ -195,6 +226,12 @@ if __name__ == "__main__":
                 post_id=args.post_id,
                 xsec_token=args.xsec_token,
                 load_all_comments=args.load_all_comments,
+            )
+        if args.test is None or args.test == "get_user_profile":
+            await test_get_user_profile(
+                headless=args.headless,
+                user_id=args.user_id,
+                xsec_token=args.xsec_token,
             )
         if args.test is None or args.test == "comment":
             await test_comment(

@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from src.core.browser_manager import BrowserManager
 from src.core.models import PublishContent
@@ -117,3 +117,7 @@ async def post_comment_to_feed(feed_id: str, xsec_token: str, content: str) -> s
     platform = _get_platform()
     ok = await platform.comment(feed_id, content, xsec_token)
     return "评论成功" if ok else "评论失败"
+
+
+if __name__ == "__main__":
+    mcp.run(transport='http')
