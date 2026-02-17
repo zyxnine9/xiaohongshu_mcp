@@ -84,25 +84,70 @@ async def test_get_post_detail(
     print("get_post_detail 跑完.\n")
 
 
+async def test_comment(
+    headless: bool = False,
+    post_id: str = "",
+    xsec_token: str = "",
+    content: str = "测试评论，请忽略",
+) -> None:
+    """测试 comment：发表评论到指定笔记."""
+    if not post_id or not xsec_token:
+        print("请提供 --post-id 和 --xsec-token，跳过 comment")
+        return
+    browser, platform = _make_platform(headless)
+    async with browser:
+        print("=== comment(post_id=%s, content=%r) ===" % (post_id, content))
+        try:
+            ok = await platform.comment(post_id, content, xsec_token=xsec_token)
+            print("comment 结果: %s" % ("成功" if ok else "失败"))
+        except Exception as e:
+            print("comment 出错:", e)
+    print("comment 跑完.\n")
+
+
+async def test_reply(
+    headless: bool = False,
+    post_id: str = "",
+    xsec_token: str = "",
+    comment_id: str = "",
+    content: str = "测试回复，请忽略",
+) -> None:
+    """测试 reply：回复指定评论."""
+    if not post_id or not xsec_token or not comment_id:
+        print("请提供 --post-id、--xsec-token 和 --comment-id，跳过 reply")
+        return
+    browser, platform = _make_platform(headless)
+    async with browser:
+        print("=== reply(post_id=%s, comment_id=%s, content=%r) ===" % (post_id, comment_id, content))
+        try:
+            ok = await platform.reply(post_id, comment_id, content, xsec_token=xsec_token)
+            print("reply 结果: %s" % ("成功" if ok else "失败"))
+        except Exception as e:
+            print("reply 出错:", e)
+    print("reply 跑完.\n")
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--test",
-        choices=["get_feeds", "search", "get_post_detail"],
+        choices=["get_feeds", "search", "get_post_detail", "comment", "reply"],
         default=None,
-        help="只跑 get_feeds / search / get_post_detail；不传则三个都跑",
+        help="只跑 get_feeds / search / get_post_detail / comment / reply；不传则全跑",
     )
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--limit", type=int, default=5, help="条数，默认 5")
     parser.add_argument("--keyword", type=str, default="美食", help="search 关键词，默认 美食")
-    parser.add_argument("--post-id", type=str, default="", help="get_post_detail 用的笔记 id")
-    parser.add_argument("--xsec-token", type=str, default="", help="get_post_detail 用的 xsec_token")
+    parser.add_argument("--post-id", type=str, default="", help="get_post_detail / comment / reply 用的笔记 id")
+    parser.add_argument("--xsec-token", type=str, default="", help="get_post_detail / comment / reply 用的 xsec_token")
     parser.add_argument(
         "--load-all-comments",
         action="store_true",
         help="get_post_detail 时是否滚动加载全部评论（较慢）",
     )
+    parser.add_argument("--comment-id", type=str, default="", help="reply 用的目标评论 id")
+    parser.add_argument("--content", type=str, default="测试评论，请忽略", help="comment / reply 用的内容")
     args = parser.parse_args()
 
     async def run():
@@ -116,6 +161,21 @@ if __name__ == "__main__":
                 post_id=args.post_id,
                 xsec_token=args.xsec_token,
                 load_all_comments=args.load_all_comments,
+            )
+        if args.test is None or args.test == "comment":
+            await test_comment(
+                headless=args.headless,
+                post_id=args.post_id,
+                xsec_token=args.xsec_token,
+                content=args.content,
+            )
+        if args.test is None or args.test == "reply":
+            await test_reply(
+                headless=args.headless,
+                post_id=args.post_id,
+                xsec_token=args.xsec_token,
+                comment_id=args.comment_id,
+                content=args.content,
             )
 
     asyncio.run(run())

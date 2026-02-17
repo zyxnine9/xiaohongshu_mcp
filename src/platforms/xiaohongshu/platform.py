@@ -8,6 +8,7 @@ from src.core.browser_manager import BrowserManager
 from src.core.models import Comment, Post, PublishContent, UserProfile
 from src.platforms.base import PlatformBase
 from src.platforms.xiaohongshu.worflow import (
+    feed_comments_workflow,
     feed_detail_workflow,
     feeds_workflow,
     login_workflow,
@@ -97,43 +98,6 @@ class XiaohongshuPlatform(PlatformBase):
             raw=item,
         )
 
-    def _note_detail_to_post(self, post_id: str, note: dict[str, Any]) -> Post:
-        """将 feed_detail_workflow 返回的 note（noteDetailMap 项）转为 Post."""
-        user = note.get("user") or {}
-        interact = note.get("interactInfo") or {}
-        image_list = note.get("imageList") or []
-        images = [img.get("urlDefault") or img.get("url") or "" for img in image_list if isinstance(img, dict)]
-        images = [u for u in images if u]
-        author = user.get("nickname") or user.get("nickName") or ""
-        author_id = user.get("userId") or ""
-        liked = interact.get("likedCount") or "0"
-        comments = interact.get("commentCount") or "0"
-        shared = interact.get("sharedCount") or "0"
-        try:
-            likes = int(liked) if isinstance(liked, str) else liked
-        except (TypeError, ValueError):
-            likes = 0
-        try:
-            comments_count = int(comments) if isinstance(comments, str) else comments
-        except (TypeError, ValueError):
-            comments_count = 0
-        try:
-            shares = int(shared) if isinstance(shared, str) else shared
-        except (TypeError, ValueError):
-            shares = 0
-        return Post(
-            id=post_id,
-            title=note.get("title") or "",
-            content=note.get("desc") or "",
-            author=author,
-            author_id=author_id,
-            xsec_token="",
-            likes=likes,
-            comments_count=comments_count,
-            shares=shares,
-            images=images,
-        )
-
     async def get_feeds(self, limit: int = 20) -> list[Post]:
         """Get feed/recommended list from homepage __INITIAL_STATE__.feed.feeds."""
         page = await self.browser.new_page()
@@ -160,27 +124,59 @@ class XiaohongshuPlatform(PlatformBase):
         xsec_token: str = "",
         load_all_comments: bool = False,
     ) -> Optional[Post]:
-        """Get post detail via feed_detail_workflow. Optionally load all comments by scrolling."""
+        """Get post detail via feed_detail_workflow; optionally load all comments."""
         if not xsec_token:
             return None
         page = await self.browser.new_page()
         try:
-            detail = await feed_detail_workflow.get_feed_detail(
-                page,
-                post_id,
-                xsec_token,
-                load_all_comments=load_all_comments,
+            raw = await feed_detail_workflow.get_feed_detail(
+                page, post_id, xsec_token, load_all_comments=load_all_comments
             )
-            if not detail:
+            if not raw:
                 return None
-            note = detail.get("note") or {}
-            post = self._note_detail_to_post(post_id, note)
-            comments = detail.get("comments", {}).get("list", None)
-            if comments:
-                post.comments = [Comment.model_validate(item) for item in comments]
-            return post
+            return self._note_detail_to_post(raw.get("note") or {}, post_id, raw)
         finally:
             await page.close()
+
+    def _note_detail_to_post(
+        self, note: dict[str, Any], post_id: str, raw_detail: Optional[dict[str, Any]] = None
+    ) -> Post:
+        """将 feed_detail_workflow 返回的 note 转为 Post（noteDetailMap 单条结构）."""
+        user = note.get("user") or {}
+        interact = note.get("interactInfo") or {}
+        image_list = note.get("imageList") or []
+        images = [img.get("url") or "" for img in image_list if isinstance(img, dict) and img.get("url")]
+        author = user.get("nickname") or user.get("nickName") or ""
+        author_id = user.get("userId") or ""
+        liked = interact.get("likedCount") or "0"
+        comments = interact.get("commentCount") or "0"
+        shared = interact.get("sharedCount") or "0"
+        try:
+            likes = int(liked) if isinstance(liked, str) else liked
+        except (TypeError, ValueError):
+            likes = 0
+        try:
+            comments_count = int(comments) if isinstance(comments, str) else comments
+        except (TypeError, ValueError):
+            comments_count = 0
+        try:
+            shares = int(shared) if isinstance(shared, str) else shared
+        except (TypeError, ValueError):
+            shares = 0
+        return Post(
+            id=note.get("noteId") or post_id,
+            title=note.get("title") or "",
+            content=note.get("desc") or "",
+            author=author,
+            author_id=author_id,
+            xsec_token=note.get("xsecToken") or "",
+            likes=likes,
+            comments_count=comments_count,
+            shares=shares,
+            images=images,
+            video_url="",
+            raw=raw_detail or note,
+        )
 
     def _user_profile_data_to_user_profile(
         self, user_id: str, data: dict[str, Any]
@@ -245,5 +241,35 @@ class XiaohongshuPlatform(PlatformBase):
             await page.close()
 
     async def comment(self, post_id: str, content: str, xsec_token: str = "") -> bool:
-        """Post comment on a post. Not implemented yet."""
-        return False
+        """Post comment on a post via feed_comments_workflow.post_comment."""
+        if not xsec_token:
+            return False
+        page = await self.browser.new_page()
+        try:
+            return await feed_comments_workflow.post_comment(
+                page, post_id, xsec_token, content
+            )
+        finally:
+            await page.close()
+
+    async def _reply_impl(
+        self,
+        post_id: str,
+        comment_id: str,
+        content: str,
+        xsec_token: str = "",
+    ) -> bool:
+        """Reply to a comment via feed_comments_workflow.reply_to_comment."""
+        if not xsec_token:
+            return False
+        page = await self.browser.new_page()
+        try:
+            return await feed_comments_workflow.reply_to_comment(
+                page,
+                post_id,
+                xsec_token,
+                content,
+                comment_id=comment_id,
+            )
+        finally:
+            await page.close()
