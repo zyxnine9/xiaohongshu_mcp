@@ -243,7 +243,7 @@ class XiaohongshuPlatform(PlatformBase):
                 tags=content.tags,
                 schedule_time=schedule_time,
             )
-            return ""
+            return True
         except (ValueError, TimeoutError, RuntimeError) as e:
             logger.warning("发布失败: %s", e)
             return None
