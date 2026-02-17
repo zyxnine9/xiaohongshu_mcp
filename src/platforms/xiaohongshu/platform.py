@@ -132,7 +132,6 @@ class XiaohongshuPlatform(PlatformBase):
             comments_count=comments_count,
             shares=shares,
             images=images,
-            video_url="",
         )
 
     async def get_feeds(self, limit: int = 20) -> list[Post]:
@@ -175,7 +174,11 @@ class XiaohongshuPlatform(PlatformBase):
             if not detail:
                 return None
             note = detail.get("note") or {}
-            return self._note_detail_to_post(post_id, note)
+            post = self._note_detail_to_post(post_id, note)
+            comments = detail.get("comments", {}).get("list", None)
+            if comments:
+                post.comments = [Comment.model_validate(item) for item in comments]
+            return post
         finally:
             await page.close()
 

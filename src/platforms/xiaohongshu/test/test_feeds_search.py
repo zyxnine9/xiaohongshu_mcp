@@ -47,7 +47,7 @@ async def test_search(headless: bool = False, keyword: str = "美食", limit: in
             print("搜索到 %d 条" % len(results))
             for i, p in enumerate(results, 1):
                 print("  [%d] %s | 作者:%s | 赞:%s" % (i, p.title or "(无标题)", p.author, p.likes))
-                print("  xsec_token:", p.xsec_token[:20] + "..." if len(p.xsec_token or "") > 20 else p.xsec_token)
+                print("  xsec_token:", p.xsec_token)
                 print("  post_id:", p.id)
         except Exception as e:
             print("search 出错:", e)
@@ -56,28 +56,16 @@ async def test_search(headless: bool = False, keyword: str = "美食", limit: in
 
 async def test_get_post_detail(
     headless: bool = False,
-    keyword: str = "美食",
-    limit: int = 3,
+    post_id: str = "",
+    xsec_token: str = "",
     load_all_comments: bool = False,
 ) -> None:
-    """测试 get_post_detail：先 search 拿一条，再拉详情."""
+    """测试 get_post_detail：直接传入 post_id 和 xsec_token 拉详情."""
+    if not post_id or not xsec_token:
+        print("请提供 --post-id 和 --xsec-token，跳过 get_post_detail")
+        return
     browser, platform = _make_platform(headless)
     async with browser:
-        print("=== 先 search 取一条 ===")
-        try:
-            results = await platform.search(keyword, limit=limit)
-        except Exception as e:
-            print("search 出错，无法继续:", e)
-            return
-        if not results:
-            print("无搜索结果，跳过 get_post_detail")
-            return
-        first = results[0]
-        post_id, xsec_token = first.id, first.xsec_token or ""
-        if not xsec_token:
-            print("第一条无 xsec_token，跳过 get_post_detail")
-            return
-        print("取第一条: id=%s title=%s" % (post_id, (first.title or "(无标题)")[:40]))
         print("=== get_post_detail(post_id=%s, load_all_comments=%s) ===" % (post_id, load_all_comments))
         try:
             post = await platform.get_post_detail(
@@ -108,6 +96,8 @@ if __name__ == "__main__":
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--limit", type=int, default=5, help="条数，默认 5")
     parser.add_argument("--keyword", type=str, default="美食", help="search 关键词，默认 美食")
+    parser.add_argument("--post-id", type=str, default="", help="get_post_detail 用的笔记 id")
+    parser.add_argument("--xsec-token", type=str, default="", help="get_post_detail 用的 xsec_token")
     parser.add_argument(
         "--load-all-comments",
         action="store_true",
@@ -123,8 +113,8 @@ if __name__ == "__main__":
         if args.test is None or args.test == "get_post_detail":
             await test_get_post_detail(
                 headless=args.headless,
-                keyword=args.keyword,
-                limit=args.limit,
+                post_id=args.post_id,
+                xsec_token=args.xsec_token,
                 load_all_comments=args.load_all_comments,
             )
 

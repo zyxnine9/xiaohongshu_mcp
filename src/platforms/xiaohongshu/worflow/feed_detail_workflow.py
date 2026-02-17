@@ -66,7 +66,7 @@ def default_comment_load_config() -> CommentLoadConfig:
     return CommentLoadConfig(
         click_more_replies=False,
         max_replies_threshold=10,
-        max_comment_items=0,
+        max_comment_items=100,
         scroll_speed="normal",
     )
 
@@ -205,7 +205,7 @@ async def _check_end_container(page: Page) -> bool:
 
 
 async def _scroll_to_comments_area(page: Page) -> None:
-    logger.info("滚动到评论区...")
+    print("滚动到评论区...")
     try:
         el = await page.wait_for_selector(".comments-container", timeout=2000)
         if el:
@@ -380,12 +380,12 @@ async def _load_all_comments_with_config(
     )
     scroll_interval = _get_scroll_interval(config.scroll_speed)
 
-    logger.info("开始加载评论...")
+    print("开始加载评论...")
     await _scroll_to_comments_area(page)
     await _sleep_random(HUMAN_DELAY_RANGE[0], HUMAN_DELAY_RANGE[1])
 
     if await _check_no_comments_area(page):
-        logger.info("✓ 检测到无评论区域（这是一片荒地），跳过加载")
+        print("✓ 检测到无评论区域（这是一片荒地），跳过加载")
         return
 
     for stats.attempts in range(max_attempts):
@@ -393,12 +393,13 @@ async def _load_all_comments_with_config(
 
         if await _check_end_container(page):
             current_count = await _get_comment_count(page)
-            logger.info(
-                "✓ 检测到 'THE END' 元素，已滑动到底部。加载完成: %d 条评论, 尝试: %d, 点击: %d, 跳过: %d",
+            print(
+                "✓ 检测到 'THE END' 元素，已滑动到底部。加载完成: %d 条评论, 尝试: %d, 点击: %d, 跳过: %d" % (
                 current_count,
                 stats.attempts + 1,
                 stats.total_clicked,
                 stats.total_skipped,
+                )
             )
             return
 
@@ -409,7 +410,7 @@ async def _load_all_comments_with_config(
             if clicked > 0 or skipped > 0:
                 stats.total_clicked += clicked
                 stats.total_skipped += skipped
-                logger.info(
+                print(
                     "点击'更多': %d 个, 跳过: %d 个, 累计点击: %d, 累计跳过: %d",
                     clicked,
                     skipped,
@@ -423,7 +424,7 @@ async def _load_all_comments_with_config(
                 if clicked2 > 0 or skipped2 > 0:
                     stats.total_clicked += clicked2
                     stats.total_skipped += skipped2
-                    logger.info("第 2 轮: 点击 %d, 跳过 %d", clicked2, skipped2)
+                    print("第 2 轮: 点击 %d, 跳过 %d", clicked2, skipped2)
                     await _sleep_random(SHORT_READ_RANGE[0], SHORT_READ_RANGE[1])
 
         current_count = await _get_comment_count(page)
@@ -431,11 +432,11 @@ async def _load_all_comments_with_config(
         logger.debug("当前评论: %d, 目标: %d", current_count, total_count)
 
         if current_count != state.last_count:
-            logger.info(
-                "✓ 评论增加: %d -> %d (+%d)",
+            print(
+                "✓ 评论增加: %d -> %d (+%d)" % (
                 state.last_count,
                 current_count,
-                current_count - state.last_count,
+                current_count - state.last_count)
             )
             state.last_count = current_count
             state.stagnant_checks = 0
@@ -468,20 +469,20 @@ async def _load_all_comments_with_config(
             state.last_scroll_top = current_scroll_top
 
         if state.stagnant_checks >= STAGNANT_LIMIT:
-            logger.info("停滞过多，尝试大冲刺...")
+            print("停滞过多，尝试大冲刺...")
             await _human_scroll(page, config.scroll_speed, True, 10)
             state.stagnant_checks = 0
             if await _check_end_container(page):
                 current_count = await _get_comment_count(page)
-                logger.info("✓ 到达底部，评论数: %d", current_count)
+                print("✓ 到达底部，评论数: %d", current_count)
 
         await asyncio.sleep(scroll_interval)
 
-    logger.info("达到最大尝试次数，最后冲刺...")
+    print("达到最大尝试次数，最后冲刺...")
     await _human_scroll(page, config.scroll_speed, True, FINAL_SPRINT_PUSH_COUNT)
     current_count = await _get_comment_count(page)
     has_end = await _check_end_container(page)
-    logger.info(
+    print(
         "✓ 加载结束: %d 条评论, 点击: %d, 跳过: %d, 到达底部: %s",
         current_count,
         stats.total_clicked,
@@ -557,8 +558,8 @@ async def get_feed_detail(
     url = make_feed_detail_url(feed_id, xsec_token)
     cfg = config or default_comment_load_config()
 
-    logger.info("打开 feed 详情页: %s", url)
-    logger.info(
+    print("打开 feed 详情页: %s", url)
+    print(
         "配置: 点击更多=%s, 回复阈值=%d, 最大评论数=%d, 滚动速度=%s",
         cfg.click_more_replies,
         cfg.max_replies_threshold,
