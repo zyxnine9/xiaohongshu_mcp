@@ -1,6 +1,6 @@
 # Social Media Operations Bot / 社交媒体自动运营机器人
 
-基于 Playwright + 固定 Workflow 的社交媒体自动化工具，支持小红书等平台。读操作以 DOM 为主，写操作采用固定流程（类似 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)），可选 browser-use + LLM 做智能回复。
+基于 Playwright + 固定 Workflow 的社交媒体自动化工具，支持小红书等平台。读操作以 DOM 为主，写操作采用固定流程（类似 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)）。
 
 ## 架构概览
 
@@ -25,11 +25,10 @@ playwright install chromium
 
 ### 2. 配置
 
-复制 `.env.example` 为 `.env`，配置 LLM API（用于智能回复，可选）：
+复制 `.env.example` 为 `.env`（可选，用于覆盖默认配置）：
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入 OPENAI_API_KEY
 ```
 
 ### 3. 登录
@@ -69,7 +68,6 @@ python scripts/run_mcp.py
 import asyncio
 from pathlib import Path
 from src.core.browser_manager import BrowserManager
-from src.core.llm_client import get_llm_client
 from src.platforms.xiaohongshu import XiaohongshuPlatform
 from src.core.models import PublishContent
 
@@ -78,8 +76,7 @@ async def main():
     cookies_path = data_dir / "cookies" / "xiaohongshu.json"
 
     async with BrowserManager(headless=True, cookies_path=cookies_path) as browser:
-        llm = get_llm_client()
-        platform = XiaohongshuPlatform(browser, llm=llm, cookies_path=cookies_path)
+        platform = XiaohongshuPlatform(browser, cookies_path=cookies_path)
 
         # 检查登录
         if not await platform.check_login():
@@ -101,20 +98,6 @@ async def main():
         # ))
 
 asyncio.run(main())
-```
-
-### 智能回复（LLM）
-
-```python
-# 使用 LLM 生成 contextual 回复
-await platform.reply(
-    post_id="xxx",
-    comment_id="yyy",
-    content="友好地回复这条评论",
-    xsec_token="...",
-    use_llm=True,
-    context="原评论内容：你好呀，这个很好吃！",
-)
 ```
 
 ## 平台支持

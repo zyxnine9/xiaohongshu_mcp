@@ -12,7 +12,6 @@ from dotenv import load_dotenv
 load_dotenv(sys_path / ".env")
 
 from src.core.browser_manager import BrowserManager
-from src.core.llm_client import get_llm_client
 from src.platforms.xiaohongshu import XiaohongshuPlatform
 
 
@@ -26,8 +25,7 @@ async def run_demo(platform_name: str, headless: bool = True) -> None:
         headless=headless,
         cookies_path=cookies_path,
     )
-    llm = get_llm_client() if platform_name == "xiaohongshu" else None
-    platform = XiaohongshuPlatform(browser, llm=llm, cookies_path=cookies_path)
+    platform = XiaohongshuPlatform(browser, cookies_path=cookies_path)
 
     async with browser:
         # 1. 检查登录

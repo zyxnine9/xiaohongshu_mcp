@@ -4,9 +4,6 @@ playwright>=1.40.0
 # AI-driven browser control (optional, for complex operations)
 browser-use>=0.1.0
 
-# LLM clients for contextual replies
-openai>=1.0.0
-
 # Async support
 aiohttp>=3.9.0
 

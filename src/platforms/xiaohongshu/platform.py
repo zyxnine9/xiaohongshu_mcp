@@ -3,7 +3,6 @@ from pathlib import Path
 from typing import Optional
 
 from src.core.browser_manager import BrowserManager
-from src.core.llm_client import LLMClient
 from src.core.models import Comment, Post, PublishContent, UserProfile
 from src.platforms.base import PlatformBase
 from src.platforms.xiaohongshu import workflows
@@ -19,11 +18,10 @@ class XiaohongshuPlatform(PlatformBase):
     def __init__(
         self,
         browser: BrowserManager,
-        llm: Optional[LLMClient] = None,
         cookies_path: Optional[Path] = None,
     ):
         cookies_path = cookies_path or Path("data") / "cookies" / "xiaohongshu.json"
-        super().__init__(browser, llm, cookies_path)
+        super().__init__(browser, cookies_path)
         self.browser.cookies_path = self.cookies_path
 
     async def login(self, headless: bool = False) -> bool:
