@@ -10,6 +10,7 @@ sys.path.insert(0, str(_root))
 
 from src.core.browser_manager import BrowserManager
 from src.core.models import PublishContent
+from src.xiaohongshu.worflow import feed_detail
 from src.xiaohongshu import (
     get_feeds,
     get_mentions,
@@ -90,7 +91,6 @@ async def test_get_post_detail(
     headless: bool = False,
     post_id: str = "",
     xsec_token: str = "",
-    load_all_comments: bool = False,
 ) -> None:
     """测试 get_post_detail：直接传入 post_id 和 xsec_token 拉详情。"""
     if not post_id or not xsec_token:
@@ -98,10 +98,9 @@ async def test_get_post_detail(
         return
     browser = _make_browser(headless)
     async with browser:
-        print("=== get_post_detail(post_id=%s, load_all_comments=%s) ===" % (post_id, load_all_comments))
         try:
             post = await get_post_detail(
-                browser, post_id, xsec_token, load_all_comments=load_all_comments
+                browser, post_id, xsec_token
             )
             if post:
                 print("详情: title=%s | 作者=%s | 赞=%s | 评论数=%s" % (
@@ -114,6 +113,34 @@ async def test_get_post_detail(
         except Exception as e:
             print("get_post_detail 出错:", e)
     print("get_post_detail 跑完.\n")
+
+
+async def test_get_feed_comments(
+    headless: bool = False,
+    post_id: str = "",
+    xsec_token: str = "",
+    max_count: int = 20,
+) -> None:
+    """测试 get_feed_comments：打开笔记详情页、滚动加载评论，只返回 comments。"""
+    if not post_id or not xsec_token:
+        print("请提供 --post-id 和 --xsec-token，跳过 get_feed_comments")
+        return
+    browser = _make_browser(headless)
+    async with browser:
+        page = await browser.new_page()
+        try:
+            print("=== get_feed_comments(post_id=%s) ===" % post_id)
+            comments = await feed_detail.get_feed_comments(
+                page, post_id, xsec_token, page_ready=False, max_count=max_count,
+            )
+            for comment in comments:
+                print(comment.content)
+
+        except Exception as e:
+            print("get_feed_comments 出错:", e)
+        finally:
+            await page.close()
+    print("get_feed_comments 跑完.\n")
 
 
 async def test_comment(
@@ -218,9 +245,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--test",
-        choices=["get_feeds", "get_mentions", "search", "get_post_detail", "get_user_profile", "comment", "reply", "publish"],
+        choices=["get_feeds", "get_mentions", "search", "get_post_detail", "get_feed_comments", "get_user_profile", "comment", "reply", "publish"],
         default=None,
-        help="只跑 get_feeds / get_mentions / search / get_post_detail / get_user_profile / comment / reply / publish；不传则全跑",
+        help="只跑 get_feeds / get_mentions / search / get_post_detail / get_feed_comments / get_user_profile / comment / reply / publish；不传则全跑",
     )
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--limit", type=int, default=5, help="条数，默认 5")
@@ -257,7 +284,12 @@ if __name__ == "__main__":
                 headless=args.headless,
                 post_id=args.post_id,
                 xsec_token=args.xsec_token,
-                load_all_comments=args.load_all_comments,
+            )
+        if args.test is None or args.test == "get_feed_comments":
+            await test_get_feed_comments(
+                headless=args.headless,
+                post_id=args.post_id,
+                xsec_token=args.xsec_token,
             )
         if args.test is None or args.test == "get_user_profile":
             await test_get_user_profile(

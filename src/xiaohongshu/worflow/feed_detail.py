@@ -8,9 +8,11 @@ import logging
 import random
 import re
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from playwright.async_api import ElementHandle, Page
+
+from src.core.models import Comment, CommentUserInfo
 
 logger = logging.getLogger(__name__)
 
@@ -585,14 +587,52 @@ async def get_feed_detail(
     return data.get("note", {}) if data else None
 
 
+def _raw_comment_to_model(raw: dict[str, Any]) -> Comment:
+    """将原始评论 dict 转为 Comment 模型，仅保留 Comment 定义的字段。"""
+    like_count = raw.get("likeCount", 0)
+    if isinstance(like_count, str):
+        like_count = int(like_count) if like_count else 0
+    sub_count = raw.get("subCommentCount", 0)
+    if isinstance(sub_count, str):
+        sub_count = int(sub_count) if sub_count else 0
+    ui = raw.get("userInfo") or {}
+    user_info = CommentUserInfo(
+        userId=ui.get("userId", ""),
+        nickname=ui.get("nickname", ""),
+        xsecToken=ui.get("xsecToken", ""),
+    )
+    return Comment(
+        id=raw["id"],
+        noteId=raw.get("noteId", ""),
+        content=raw.get("content", ""),
+        createTime=raw.get("createTime", 0),
+        likeCount=like_count,
+        liked=raw.get("liked", False),
+        subCommentCount=sub_count,
+        showTags=raw.get("showTags", []) or [],
+        userInfo=user_info,
+    )
+
+
+def _raw_comments_to_models(raw_list: list) -> List[Comment]:
+    """将原始评论列表转为 Comment 模型列表（含子评论）。"""
+    result: List[Comment] = []
+    for item in raw_list:
+        result.append(_raw_comment_to_model(item))
+        for sub in item.get("subComments") or []:
+            result.append(_raw_comment_to_model(sub))
+    return result
+
+
 async def get_feed_comments(
     page: Page,
     feed_id: str,
     xsec_token: str,
+    max_count: int = 20,
     *,
     page_ready: bool = False,
     config: Optional[CommentLoadConfig] = None,
-) -> Optional[dict[str, Any]]:
+) -> Optional[List[Comment]]:
     """打开笔记详情页（可选），滚动加载全部评论，返回 comments。
 
     Args:
@@ -603,12 +643,13 @@ async def get_feed_comments(
         config: 评论加载配置，默认使用 default_comment_load_config()。
 
     Returns:
-        评论 dict（comments）；失败返回 None。
+        Comment 模型列表（含子评论）；失败返回 None。
     """
     if not page_ready:
         if not await _open_feed_detail_page(page, feed_id, xsec_token):
             return None
     cfg = config or default_comment_load_config()
+    cfg.max_comment_items = min(max_count, cfg.max_comment_items)
     print(
         "配置: 点击更多=%s, 回复阈值=%d, 最大评论数=%d, 滚动速度=%s",
         cfg.click_more_replies,
@@ -621,4 +662,7 @@ async def get_feed_comments(
     except Exception as e:
         logger.warning("加载全部评论失败: %s", e)
     data = await _extract_feed_detail(page, feed_id)
-    return data.get("comments", {}) if data else None
+    raw_list = data.get("comments", {}).get("list")
+    if not raw_list:
+        return None
+    return _raw_comments_to_models(raw_list)

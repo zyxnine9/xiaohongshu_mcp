@@ -209,7 +209,6 @@ async def get_post_detail(
     browser: BrowserManager,
     post_id: str,
     xsec_token: str,
-    load_all_comments: bool = False,
 ) -> Optional[Post]:
     """获取帖子详情，可选加载全部评论."""
     if not xsec_token:
@@ -217,17 +216,7 @@ async def get_post_detail(
     page = await browser.new_page()
     try:
         note = await feed_detail.get_feed_detail(page, post_id, xsec_token)
-        if not note:
-            return None
-        comments = {}
-        if load_all_comments:
-            comments = (
-                await feed_detail.get_feed_comments(
-                    page, post_id, xsec_token, page_ready=True
-                )
-                or {}
-            )
-        raw = {"note": note, "comments": comments}
+        raw = {"note": note}
         return _note_detail_to_post(note, post_id, raw)
     finally:
         await page.close()

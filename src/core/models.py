@@ -10,14 +10,23 @@ class Platform(str, Enum):
     XIAOHONGSHU = "xiaohongshu"
 
 
+class CommentUserInfo(BaseModel):
+    """评论者信息。"""
+    userId: str = ""
+    nickname: str = ""
+    xsecToken: str = ""
+
+
 class Comment(BaseModel):
     id: str
     noteId: str
+    content: str
     createTime: int
     likeCount: int           # 自动将 "1" 转为 1
     liked: bool
     subCommentCount: int     # 自动将 "0" 转为 0
     showTags: List[str] = []
+    userInfo: CommentUserInfo = Field(default_factory=CommentUserInfo)
 
 class Post(BaseModel):
     """A social media post."""
