@@ -8,8 +8,6 @@ from pydantic import BaseModel, Field
 class Platform(str, Enum):
     """Supported social media platforms."""
     XIAOHONGSHU = "xiaohongshu"
-    TWITTER = "twitter"
-    LINKEDIN = "linkedin"
 
 
 class Comment(BaseModel):

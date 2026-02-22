@@ -3,6 +3,7 @@
 独立运行（scripts/run_mcp.py）时使用自带 lifespan 启动浏览器；
 若将来挂载到 FastAPI，可改为无 lifespan，由 FastAPI lifespan 设置 platform。
 """
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -69,6 +70,31 @@ async def list_feeds(limit: int = 20) -> str:
 
 
 @mcp.tool()
+async def list_mentions(limit: int = 20) -> str:
+    """获取小红书 @人/提及 消息列表。limit 默认 20。"""
+    platform = _get_platform()
+    mentions = await platform.get_mentions(limit=limit)
+    if not mentions:
+        return "无提及消息"
+    lines = []
+    for i, m in enumerate(mentions, 1):
+        msg_id = m.get("id") or m.get("msgId") or m.get("messageId") or "(无id)"
+        msg_type = m.get("msgType") or m.get("type") or ""
+        content = (m.get("content") or m.get("msg") or "")[:80]
+        from_user = (m.get("fromUser") or {}).get("nickname") if isinstance(m.get("fromUser"), dict) else ""
+        note_id = m.get("noteId") or m.get("targetNoteId") or ""
+        line = f"- {i}. id: {msg_id}, type: {msg_type}"
+        if from_user:
+            line += f", 来自: {from_user}"
+        if note_id:
+            line += f", 笔记id: {note_id}"
+        if content:
+            line += f", 内容: {content}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+@mcp.tool()
 async def search_feeds(keyword: str, limit: int = 20) -> str:
     """根据关键词搜索小红书内容。"""
     platform = _get_platform()
@@ -119,5 +145,15 @@ async def post_comment_to_feed(feed_id: str, xsec_token: str, content: str) -> s
     return "评论成功" if ok else "评论失败"
 
 
+@mcp.tool()
+async def reply_comment(feed_id: str, comment_id: str, xsec_token: str, content: str) -> str:
+    """回复指定评论。需要 feed_id、comment_id（目标评论 id）、xsec_token 和回复内容。comment_id 可从 get_feed_detail 返回的评论中获取。"""
+    platform = _get_platform()
+    ok = await platform.reply(feed_id, comment_id, content, xsec_token)
+    return "回复成功" if ok else "回复失败"
+
+
 if __name__ == "__main__":
-    mcp.run(transport='http')
+    mcp.run(
+        'streamable-http'
+    )

@@ -13,9 +13,10 @@ from src.platforms.xiaohongshu.worflow import (
     feed_detail,
     feeds,
     login,
+    memtions,
     publish,
     search,
-    user_profile_workflow,
+    user_profile,
 )
 
 logger = logging.getLogger(__name__)
@@ -122,6 +123,14 @@ class XiaohongshuPlatform(PlatformBase):
         finally:
             await page.close()
 
+    async def get_mentions(self, limit: int = 20) -> list[dict[str, Any]]:
+        """获取 @人/提及 消息列表，从消息通知页 __INITIAL_STATE__.notification 拉取。"""
+        page = await self.browser.new_page()
+        try:
+            return await memtions.get_mention_list(page, limit=limit)
+        finally:
+            await page.close()
+
     async def get_post_detail(
         self,
         post_id: str,
@@ -185,7 +194,7 @@ class XiaohongshuPlatform(PlatformBase):
     def _user_profile_data_to_user_profile(
         self, user_id: str, data: dict[str, Any]
     ) -> UserProfile:
-        """将 user_profile_workflow 返回的 basic_info + interactions 转为 UserProfile."""
+        """将 user_profile 返回的 basic_info + interactions 转为 UserProfile."""
         basic_info = data.get("basic_info") or {}
         interactions = data.get("interactions") or []
         nickname = basic_info.get("nickname") or ""
@@ -217,12 +226,12 @@ class XiaohongshuPlatform(PlatformBase):
         )
 
     async def get_user_profile(self, user_id: str, xsec_token: str = "") -> Optional[UserProfile]:
-        """Get user profile via user_profile_workflow. Requires xsec_token from feed/search."""
+        """Get user profile via user_profile. Requires xsec_token from feed/search."""
         if not xsec_token:
             return None
         page = await self.browser.new_page()
         try:
-            data = await user_profile_workflow.user_profile(page, user_id, xsec_token)
+            data = await user_profile.user_profile(page, user_id, xsec_token)
             if not data:
                 return None
             return self._user_profile_data_to_user_profile(user_id, data)
