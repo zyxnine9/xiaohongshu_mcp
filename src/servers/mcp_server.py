@@ -3,6 +3,7 @@
 独立运行（scripts/run_mcp.py）时使用自带 lifespan 启动浏览器；
 若将来挂载到 FastAPI，可改为无 lifespan，由 FastAPI lifespan 设置 platform。
 """
+import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -119,5 +120,15 @@ async def post_comment_to_feed(feed_id: str, xsec_token: str, content: str) -> s
     return "评论成功" if ok else "评论失败"
 
 
+@mcp.tool()
+async def reply_comment(feed_id: str, comment_id: str, xsec_token: str, content: str) -> str:
+    """回复指定评论。需要 feed_id、comment_id（目标评论 id）、xsec_token 和回复内容。comment_id 可从 get_feed_detail 返回的评论中获取。"""
+    platform = _get_platform()
+    ok = await platform.reply(feed_id, comment_id, content, xsec_token)
+    return "回复成功" if ok else "回复失败"
+
+
 if __name__ == "__main__":
-    mcp.run(transport='http')
+    mcp.run(
+        'streamable-http'
+    )

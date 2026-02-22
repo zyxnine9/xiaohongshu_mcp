@@ -144,7 +144,7 @@ social_media_op/
 
 - **位置**：`src/servers/mcp_server.py`
 - **启动**：`python scripts/run_mcp.py`，默认 `http://0.0.0.0:18060/mcp`（与 xiaohongshu-mcp 端口一致）
-- **工具**：`check_login_status`、`list_feeds`、`search_feeds`、`get_feed_detail`、`publish_content`、`post_comment_to_feed`
+- **工具**：`check_login_status`、`get_user_login_status`、`list_feeds`、`search_feeds`、`get_feed_detail`、`publish_content`、`post_comment_to_feed`
 - **客户端配置**（如 Cursor）：`.cursor/mcp.json` 中配置 `"url": "http://localhost:18060/mcp"`
 
 ---
