@@ -79,7 +79,7 @@ async def test_search(headless: bool = False, keyword: str = "美食", limit: in
             for i, p in enumerate(results, 1):
                 print("  [%d] %s | 作者:%s | 赞:%s 评论:%s" % (i, p.title or "(无标题)", p.author, p.likes, p.comments_count))
                 print(f"  xsec_token: {p.xsec_token}. post id: {p.id}  " )
-                print("  author id", p.author_id)
+                print("  content", p.content)
             
         except Exception as e:
             print("search 出错:", e)

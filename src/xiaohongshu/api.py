@@ -216,12 +216,19 @@ async def get_post_detail(
         return None
     page = await browser.new_page()
     try:
-        raw = await feed_detail.get_feed_detail(
-            page, post_id, xsec_token, load_all_comments=load_all_comments
-        )
-        if not raw:
+        note = await feed_detail.get_feed_detail(page, post_id, xsec_token)
+        if not note:
             return None
-        return _note_detail_to_post(raw.get("note") or {}, post_id, raw)
+        comments = {}
+        if load_all_comments:
+            comments = (
+                await feed_detail.get_feed_comments(
+                    page, post_id, xsec_token, page_ready=True
+                )
+                or {}
+            )
+        raw = {"note": note, "comments": comments}
+        return _note_detail_to_post(note, post_id, raw)
     finally:
         await page.close()
 
