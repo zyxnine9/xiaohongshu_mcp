@@ -13,6 +13,7 @@ from src.core.models import PublishContent
 from src.servers.state import get_browser, set_browser
 from src.xiaohongshu import (
     check_login,
+    get_feed_comments as xhs_get_feed_comments,
     get_feeds,
     get_mentions,
     get_post_detail,
@@ -107,34 +108,47 @@ async def search_feeds(keyword: str, limit: int = 20) -> str:
 
 @mcp.tool()
 async def get_feed_detail(feed_id: str, xsec_token: str = "") -> str:
-    """获取小红书帖子详情（含互动数据与评论）。需要 feed_id，xsec_token 可从 Feed 列表或搜索结果中获取。"""
+    """获取小红书帖子详情（标题、正文、作者、互动数据等）。需要 feed_id，xsec_token 可从 list_feeds / search_feeds 返回的数据中获取，用于后续评论、回复等操作。"""
+    if not xsec_token:
+        return "需要 xsec_token，请从 list_feeds 或 search_feeds 的结果中获取"
     browser = _get_browser()
     post = await get_post_detail(browser, feed_id, xsec_token)
     if not post:
-        return "未找到该帖子或需要登录"
+        return "获取失败，请检查 feed_id 与 xsec_token 是否正确"
+    content_preview = (post.content or "")[:800]
+    if len(post.content or "") > 800:
+        content_preview += "..."
     parts = [
-        f"标题: {post.title}",
-        f"内容: {post.content[:500]}..." if len(post.content or "") > 500 else f"内容: {post.content}",
-        f"作者: {post.author}",
-        f"点赞: {post.likes}, 评论数: {post.comments_count}",
+        f"id: {post.id}",
+        f"标题: {post.title or '(无标题)'}",
+        f"内容: {content_preview}",
+        f"作者: {post.author or '(未知)'} (author_id: {post.author_id})",
+        f"互动: 点赞 {post.likes} | 评论 {post.comments_count} | 分享 {post.shares}",
+        f"xsec_token: {post.xsec_token}",
     ]
-    raw = post.raw if hasattr(post, "raw") else None
-    if isinstance(raw, dict):
-        comments = raw.get("comments", {})
-        if isinstance(comments, dict):
-            comment_list = list(comments.values()) if comments else []
-        else:
-            comment_list = comments if isinstance(comments, list) else []
-        if comment_list:
-            contents = []
-            for c in comment_list[:10]:
-                if isinstance(c, dict) and "content" in c:
-                    contents.append(str(c.get("content", ""))[:80])
-                elif hasattr(c, "content"):
-                    contents.append(str(getattr(c, "content", ""))[:80])
-            if contents:
-                parts.append("评论: " + "; ".join(contents))
+    if post.images:
+        img_preview = post.images[:3]
+        parts.append(f"图片: {len(post.images)} 张，前几张: {img_preview}")
     return "\n".join(parts)
+
+
+@mcp.tool()
+async def get_feed_comments(feed_id: str, xsec_token: str, max_count: int = 50) -> str:
+    """获取指定小红书帖子的评论列表。需要 feed_id、xsec_token，可选 max_count（默认 50）限制返回数量。comment_id 可用于 reply_comment。"""
+    if not xsec_token:
+        return "需要 xsec_token，请从 list_feeds 或 search_feeds 或 get_feed_detail 的结果中获取"
+    browser = _get_browser()
+    comments = await xhs_get_feed_comments(browser, feed_id, xsec_token, max_count=max_count)
+    if comments is None:
+        return "获取评论失败"
+    if not comments:
+        return "暂无评论"
+    lines = []
+    for i, c in enumerate(comments, 1):
+        nickname = c.userInfo.nickname if c.userInfo else ""
+        line = f"- {i}. id: {c.id} | {nickname}: {c.content[:80]}{'...' if len(c.content or '') > 80 else ''} | 赞: {c.likeCount} | 子评论: {c.subCommentCount}"
+        lines.append(line)
+    return "\n".join(lines)
 
 
 @mcp.tool()

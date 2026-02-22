@@ -2,6 +2,7 @@
 from src.xiaohongshu.api import (
     check_login,
     get_feeds,
+    get_feed_comments,
     get_mentions,
     get_post_detail,
     get_user_profile,
@@ -15,6 +16,7 @@ from src.xiaohongshu.api import (
 __all__ = [
     "check_login",
     "get_feeds",
+    "get_feed_comments",
     "get_mentions",
     "get_post_detail",
     "get_user_profile",

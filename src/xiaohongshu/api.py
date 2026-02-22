@@ -3,10 +3,10 @@ import asyncio
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from src.core.browser_manager import BrowserManager
-from src.core.models import Post, PublishContent, UserProfile
+from src.core.models import Comment, Post, PublishContent, UserProfile
 from src.xiaohongshu.worflow import (
     feed_comments,
     feed_detail,
@@ -258,6 +258,24 @@ async def publish_content(
     except (ValueError, TimeoutError, RuntimeError) as e:
         logger.warning("发布失败: %s", e)
         return None
+    finally:
+        await page.close()
+
+
+async def get_feed_comments(
+    browser: BrowserManager,
+    feed_id: str,
+    xsec_token: str,
+    max_count: int = 50,
+) -> Optional[List[Comment]]:
+    """获取笔记评论列表。需要 feed_id、xsec_token，可选 max_count 限制数量。"""
+    if not xsec_token:
+        return None
+    page = await browser.new_page()
+    try:
+        return await feed_detail.get_feed_comments(
+            page, feed_id, xsec_token, max_count=max_count
+        )
     finally:
         await page.close()
 
