@@ -1,6 +1,6 @@
 """Common data models across platforms (Pydantic)."""
 from enum import Enum
-from typing import Any, List
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -32,6 +32,7 @@ class Post(BaseModel):
     shares: int = 0
     images: list[str] = Field(default_factory=list)
     comments: List[Comment] = Field(default_factory=list)
+    raw: Optional[Any] = None  # 原始数据，用于获取评论等
 
 
 class UserProfile(BaseModel):

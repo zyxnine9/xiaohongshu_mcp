@@ -8,38 +8,36 @@ from pydantic import BaseModel, Field
 
 from src.core.browser_manager import BrowserManager
 from src.core.models import PublishContent
-from src.platforms.xiaohongshu import XiaohongshuPlatform
-from src.servers.state import get_platform, set_platform
+from src.servers.state import get_browser, set_browser
+from src.xiaohongshu import (
+    check_login,
+    get_feeds,
+    get_post_detail,
+    post_comment,
+    publish_content,
+    search_feeds,
+)
 
 # 默认路径（可被 run 时覆盖）
 DEFAULT_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 DEFAULT_COOKIES_PATH = DEFAULT_DATA_DIR / "cookies" / "xiaohongshu.json"
 
 
-def _make_platform(headless: bool = True):
-    """Create browser and platform instance."""
-    DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    browser = BrowserManager(
-        headless=headless,
-        cookies_path=DEFAULT_COOKIES_PATH,
-    )
-    return browser, XiaohongshuPlatform(
-        browser,
-        cookies_path=DEFAULT_COOKIES_PATH,
-    )
-
-
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     """Manage browser lifecycle: start on startup, close on shutdown."""
-    browser, platform = None, None
+    browser = None
     try:
-        browser, platform = _make_platform(headless=True)
+        DEFAULT_DATA_DIR.mkdir(parents=True, exist_ok=True)
+        browser = BrowserManager(
+            headless=True,
+            cookies_path=DEFAULT_COOKIES_PATH,
+        )
         await browser.start()
-        set_platform(platform)
+        set_browser(browser)
         yield
     finally:
-        set_platform(None)
+        set_browser(None)
         if browser:
             await browser.close()
 
@@ -73,7 +71,7 @@ class PostDetailRequest(BaseModel):
 
 
 def _post_to_dict(p: Any) -> dict:
-    """Convert Post dataclass to JSON-serializable dict."""
+    """Convert Post to JSON-serializable dict."""
     return {
         "id": p.id,
         "title": getattr(p, "title", "") or "",
@@ -96,11 +94,11 @@ async def health():
 
 
 @app.get("/xiaohongshu/check_login")
-async def check_login():
+async def check_login_route():
     """检查小红书登录状态."""
     try:
-        platform = get_platform()
-        ok = await platform.check_login()
+        browser = get_browser()
+        ok = await check_login(browser)
         return {"logged_in": ok}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -110,30 +108,30 @@ async def check_login():
 async def list_feeds(limit: int = 20):
     """获取小红书首页推荐列表."""
     try:
-        platform = get_platform()
-        feeds = await platform.get_feeds(limit=limit)
-        return {"feeds": [_post_to_dict(p) for p in feeds]}
+        browser = get_browser()
+        feeds_list = await get_feeds(browser, limit=limit)
+        return {"feeds": [_post_to_dict(p) for p in feeds_list]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/xiaohongshu/search")
-async def search_feeds(keyword: str, limit: int = 20):
+async def search_feeds_route(keyword: str, limit: int = 20):
     """搜索小红书内容."""
     try:
-        platform = get_platform()
-        results = await platform.search(keyword, limit=limit)
+        browser = get_browser()
+        results = await search_feeds(browser, keyword, limit=limit)
         return {"feeds": [_post_to_dict(p) for p in results]}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/xiaohongshu/post_detail")
-async def get_post_detail(body: PostDetailRequest):
+async def get_post_detail_route(body: PostDetailRequest):
     """获取帖子详情（含评论）."""
     try:
-        platform = get_platform()
-        post = await platform.get_post_detail(body.post_id, body.xsec_token)
+        browser = get_browser()
+        post = await get_post_detail(browser, body.post_id, body.xsec_token)
         if not post:
             raise HTTPException(status_code=404, detail="Post not found")
         return _post_to_dict(post)
@@ -147,7 +145,7 @@ async def get_post_detail(body: PostDetailRequest):
 async def publish(body: PublishRequest):
     """发布图文/视频到小红书."""
     try:
-        platform = get_platform()
+        browser = get_browser()
         content = PublishContent(
             title=body.title,
             content=body.content,
@@ -155,10 +153,10 @@ async def publish(body: PublishRequest):
             video=body.video or "",
             tags=body.tags,
         )
-        post_id = await platform.publish(content)
-        if not post_id:
+        result = await publish_content(browser, content)
+        if result is None:
             raise HTTPException(status_code=500, detail="Publish failed")
-        return {"post_id": post_id}
+        return {"post_id": result}
     except HTTPException:
         raise
     except Exception as e:
@@ -166,11 +164,11 @@ async def publish(body: PublishRequest):
 
 
 @app.post("/xiaohongshu/comment")
-async def post_comment(body: CommentRequest):
+async def post_comment_route(body: CommentRequest):
     """在帖子下发表评论."""
     try:
-        platform = get_platform()
-        ok = await platform.comment(body.post_id, body.content, body.xsec_token)
+        browser = get_browser()
+        ok = await post_comment(browser, body.post_id, body.content, body.xsec_token)
         return {"success": ok}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
