@@ -6,7 +6,7 @@ from . import (
     login,
     publish,
     search,
-    user_profile_workflow,
+    user_profile,
 )
 
 __all__ = [
@@ -16,5 +16,5 @@ __all__ = [
     "feeds",
     "publish",
     "search",
-    "user_profile_workflow",
+    "user_profile",
 ]
