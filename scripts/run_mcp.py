@@ -1,16 +1,23 @@
-#!/usr/bin/env python3
-"""独立启动 MCP 服务（Streamable HTTP）。MCP 自带 lifespan 会启动浏览器。"""
-import sys
-from pathlib import Path
+"""
+启动 MCP Server (HTTP / SSE 模式)
+"""
+import argparse
+import uvicorn
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
+# 假设你的原始代码保存在 src/servers/mcp_server.py 中
+# 请根据你的实际文件名进行修改
 from src.servers.mcp_server import mcp
 
-# 默认 18060 与 xiaohongshu-mcp 一致，便于 Cursor/Claude 配置
-if __name__ == "__main__":
+def main():
+    parser = argparse.ArgumentParser(description="Start Social Media MCP HTTP Server")
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
+    parser.add_argument("--port", type=int, default=8000, help="Port to bind (default: 8000)")
+    args = parser.parse_args()
+    
+    # 使用 SSE 传输层启动，这会自动拉起底层的 ASGI HTTP 服务，并触发你编写的 _mcp_lifespan
     mcp.run(
-        transport="streamable-http",
-        host="0.0.0.0",
-        port=18060,
+        'streamable-http'
     )
+
+if __name__ == "__main__":
+    main()

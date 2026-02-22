@@ -1,7 +1,8 @@
-"""Common data types across platforms."""
-from dataclasses import dataclass, field
+"""Common data models across platforms (Pydantic)."""
 from enum import Enum
-from typing import Any
+from typing import Any, List
+
+from pydantic import BaseModel, Field
 
 
 class Platform(str, Enum):
@@ -11,8 +12,16 @@ class Platform(str, Enum):
     LINKEDIN = "linkedin"
 
 
-@dataclass
-class Post:
+class Comment(BaseModel):
+    id: str
+    noteId: str
+    createTime: int
+    likeCount: int           # 自动将 "1" 转为 1
+    liked: bool
+    subCommentCount: int     # 自动将 "0" 转为 0
+    showTags: List[str] = []
+
+class Post(BaseModel):
     """A social media post."""
     id: str
     title: str = ""
@@ -23,24 +32,11 @@ class Post:
     likes: int = 0
     comments_count: int = 0
     shares: int = 0
-    images: list[str] = field(default_factory=list)
-    video_url: str = ""
-    raw: dict[str, Any] = field(default_factory=dict)
+    images: list[str] = Field(default_factory=list)
+    comments: List[Comment] = Field(default_factory=list)
 
 
-@dataclass
-class Comment:
-    """A comment on a post."""
-    id: str
-    content: str
-    author: str
-    author_id: str
-    likes: int = 0
-    parent_id: str = ""
-
-
-@dataclass
-class UserProfile:
+class UserProfile(BaseModel):
     """User profile info."""
     user_id: str
     nickname: str
@@ -50,11 +46,10 @@ class UserProfile:
     likes_count: int = 0
 
 
-@dataclass
-class PublishContent:
+class PublishContent(BaseModel):
     """Content to publish."""
     title: str = ""
     content: str = ""
-    images: list[str] = field(default_factory=list)
+    images: list[str] = Field(default_factory=list)
     video: str = ""
-    tags: list[str] = field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)

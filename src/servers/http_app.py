@@ -7,8 +7,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from src.core.browser_manager import BrowserManager
-from src.core.llm_client import get_llm_client
-from src.core.types import PublishContent
+from src.core.models import PublishContent
 from src.platforms.xiaohongshu import XiaohongshuPlatform
 from src.servers.state import get_platform, set_platform
 
@@ -24,10 +23,8 @@ def _make_platform(headless: bool = True):
         headless=headless,
         cookies_path=DEFAULT_COOKIES_PATH,
     )
-    llm = get_llm_client()
     return browser, XiaohongshuPlatform(
         browser,
-        llm=llm,
         cookies_path=DEFAULT_COOKIES_PATH,
     )
 

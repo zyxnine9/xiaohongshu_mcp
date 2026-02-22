@@ -1,1 +1,1 @@
-"""Core modules for browser management and LLM"""
+"""Core modules for browser management."""

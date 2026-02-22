@@ -2,13 +2,12 @@
 
 ## 概述
 
-社交媒体自动运营机器人采用**混合架构**：读操作以 DOM 为主，写操作以固定流程为主，复杂场景可选 browser-use + LLM。
+社交媒体自动运营机器人采用**混合架构**：读操作以 DOM 为主，写操作以固定流程为主。
 
 ### 设计原则
 
 1. **读操作**：直接 DOM 解析，轻量、快速，不易触发反爬
 2. **写操作**：固定 Workflow（登录、发布、评论、回复），类似 xiaohongshu-mcp
-3. **可选增强**：browser-use + LLM，用于需要“像人一样看页面”的复杂任务（如智能回复、跨页面操作）
 
 ---
 
@@ -34,17 +33,17 @@
 │           publish, comment, reply                                    │
 └─────────────────────────────────────────────────────────────────────┘
                                     │
-         ┌──────────────────────────┼──────────────────────────┐
-         ▼                          ▼                          ▼
-┌─────────────────┐    ┌─────────────────────┐    ┌─────────────────────┐
-│  Reader (DOM)   │    │  Writer (Workflows)  │    │  LLM (可选)          │
-│  读操作         │    │  固定流程写操作       │    │  contextual 回复     │
-│  - get_feeds    │    │  - login             │    │  - 智能评论          │
-│  - search       │    │  - publish           │    │  - 智能回复          │
-│  - get_detail   │    │  - comment           │    │  - browser-use      │
-└─────────────────┘    └─────────────────────┘    └─────────────────────┘
-         │                          │                          │
-         └──────────────────────────┼──────────────────────────┘
+                    ┌───────────────┴───────────────┐
+                    ▼                               ▼
+         ┌─────────────────┐             ┌─────────────────────┐
+         │  Reader (DOM)   │             │  Writer (Workflows)  │
+         │  读操作         │             │  固定流程写操作       │
+         │  - get_feeds    │             │  - login             │
+         │  - search       │             │  - publish           │
+         │  - get_detail   │             │  - comment           │
+         └─────────────────┘             └─────────────────────┘
+                    │                               │
+                    └───────────────┬───────────────┘
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    BrowserManager (Playwright)                        │
@@ -61,7 +60,6 @@ social_media_op/
 ├── src/
 │   ├── core/                    # 核心模块
 │   │   ├── browser_manager.py   # 浏览器管理
-│   │   ├── llm_client.py        # LLM 客户端（生成 contextual 回复）
 │   │   └── types.py             # 通用类型
 │   ├── platforms/               # 平台适配器
 │   │   ├── base.py              # 抽象基类
@@ -99,7 +97,7 @@ social_media_op/
 | `get_post_detail(post_id, xsec_token)` | 读 | 获取帖子详情（含评论） |
 | `publish(content)` | 写 | 发布图文/视频 |
 | `comment(post_id, content, xsec_token)` | 写 | 发表评论 |
-| `reply(post_id, comment_id, content, use_llm)` | 写 | 回复评论（可选 LLM 生成） |
+| `reply(post_id, comment_id, content, xsec_token)` | 写 | 回复评论 |
 
 ---
 
@@ -109,7 +107,6 @@ social_media_op/
 |------|----------|------|
 | 读 | DOM + Playwright | `page.query_selector`, `page.evaluate`，或解析 `__INITIAL_STATE__` |
 | 写 | 固定 Workflow | 明确的 `goto → click → fill → click` 流程 |
-| 复杂写 | browser-use（可选） | 当固定流程失效或需“智能”操作时 |
 
 ---
 

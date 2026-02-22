@@ -7,11 +7,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from src.core.browser_manager import BrowserManager
-from src.core.llm_client import get_llm_client
-from src.core.types import PublishContent
+from src.core.models import PublishContent
 from src.platforms.xiaohongshu import XiaohongshuPlatform
 from src.servers.state import set_platform
 
@@ -26,7 +25,6 @@ async def _mcp_lifespan(server: FastMCP) -> AsyncIterator[None]:
     browser = BrowserManager(headless=True, cookies_path=DEFAULT_COOKIES_PATH)
     platform = XiaohongshuPlatform(
         browser,
-        llm=get_llm_client(),
         cookies_path=DEFAULT_COOKIES_PATH,
     )
     try:
@@ -119,3 +117,7 @@ async def post_comment_to_feed(feed_id: str, xsec_token: str, content: str) -> s
     platform = _get_platform()
     ok = await platform.comment(feed_id, content, xsec_token)
     return "评论成功" if ok else "评论失败"
+
+
+if __name__ == "__main__":
+    mcp.run(transport='http')

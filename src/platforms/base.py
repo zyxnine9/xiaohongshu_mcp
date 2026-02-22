@@ -6,8 +6,7 @@ from typing import Optional
 from playwright.async_api import Page
 
 from src.core.browser_manager import BrowserManager
-from src.core.llm_client import LLMClient
-from src.core.types import Comment, Post, PublishContent, UserProfile
+from src.core.models import Comment, Post, PublishContent, UserProfile
 
 
 class PlatformBase(ABC):
@@ -19,11 +18,9 @@ class PlatformBase(ABC):
     def __init__(
         self,
         browser: BrowserManager,
-        llm: Optional[LLMClient] = None,
         cookies_path: Optional[Path] = None,
     ):
         self.browser = browser
-        self.llm = llm
         self.cookies_path = cookies_path or Path("data") / "cookies" / f"{self.name}.json"
 
     # --- Auth ---
@@ -74,12 +71,8 @@ class PlatformBase(ABC):
         comment_id: str,
         content: str,
         xsec_token: str = "",
-        use_llm: bool = False,
-        context: str = "",
     ) -> bool:
-        """Reply to a comment. Can use LLM for contextual content if use_llm=True."""
-        if use_llm and self.llm and context:
-            content = await self.llm.generate_reply(context, f"针对这条评论回复：{content}")
+        """Reply to a comment."""
         return await self._reply_impl(post_id, comment_id, content, xsec_token)
 
     async def _reply_impl(

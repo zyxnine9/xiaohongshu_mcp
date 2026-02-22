@@ -1,6 +1,6 @@
 # Social Media Operations Bot / 社交媒体自动运营机器人
 
-基于 Playwright + 固定 Workflow 的社交媒体自动化工具，支持小红书等平台。读操作以 DOM 为主，写操作采用固定流程,基本参考 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)实现
+基于 Playwright + 固定 Workflow 的社交媒体自动化工具，支持小红书等平台。读操作以 DOM 为主，写操作采用固定流程（类似 [xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)）。
 
 
 
