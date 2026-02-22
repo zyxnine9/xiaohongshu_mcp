@@ -1,6 +1,6 @@
 """Common data models across platforms (Pydantic)."""
 from enum import Enum
-from typing import Any, List
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -10,14 +10,23 @@ class Platform(str, Enum):
     XIAOHONGSHU = "xiaohongshu"
 
 
+class CommentUserInfo(BaseModel):
+    """评论者信息。"""
+    userId: str = ""
+    nickname: str = ""
+    xsecToken: str = ""
+
+
 class Comment(BaseModel):
     id: str
     noteId: str
+    content: str
     createTime: int
     likeCount: int           # 自动将 "1" 转为 1
     liked: bool
     subCommentCount: int     # 自动将 "0" 转为 0
     showTags: List[str] = []
+    userInfo: CommentUserInfo = Field(default_factory=CommentUserInfo)
 
 class Post(BaseModel):
     """A social media post."""
@@ -32,6 +41,7 @@ class Post(BaseModel):
     shares: int = 0
     images: list[str] = Field(default_factory=list)
     comments: List[Comment] = Field(default_factory=list)
+    raw: Optional[Any] = None  # 原始数据，用于获取评论等
 
 
 class UserProfile(BaseModel):

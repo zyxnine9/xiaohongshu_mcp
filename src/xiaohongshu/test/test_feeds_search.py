@@ -1,35 +1,43 @@
 #!/usr/bin/env python3
-"""简单脚本：测试 XiaohongshuPlatform 的 get_feeds、get_mentions、search 等，跑通即可."""
+"""简单脚本：测试 get_feeds、get_mentions、search 等，跑通即可."""
 import asyncio
 import sys
 from pathlib import Path
 
 # 把项目根目录加入 path，才能 import src
-_root = Path(__file__).resolve().parent.parent.parent.parent.parent
+_root = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_root))
 
 from src.core.browser_manager import BrowserManager
 from src.core.models import PublishContent
-from src.platforms.xiaohongshu import XiaohongshuPlatform
+from src.xiaohongshu.worflow import feed_detail
+from src.xiaohongshu import (
+    get_feeds,
+    get_mentions,
+    get_post_detail,
+    get_user_profile,
+    post_comment,
+    publish_content,
+    reply_comment,
+    search_feeds,
+)
 
 
-def _make_platform(headless: bool):
-    """创建 browser + platform，调用方负责 async with browser."""
+def _make_browser(headless: bool):
+    """创建 browser，调用方负责 async with browser。"""
     data_dir = _root / "data"
     cookies_path = data_dir / "cookies" / "xiaohongshu.json"
     data_dir.mkdir(parents=True, exist_ok=True)
-    browser = BrowserManager(headless=headless, cookies_path=cookies_path)
-    platform = XiaohongshuPlatform(browser, cookies_path=cookies_path)
-    return browser, platform
+    return BrowserManager(headless=headless, cookies_path=cookies_path)
 
 
 async def test_get_feeds(headless: bool = False, limit: int = 5) -> None:
-    """只测试 get_feeds."""
-    browser, platform = _make_platform(headless)
+    """只测试 get_feeds。"""
+    browser = _make_browser(headless)
     async with browser:
         print("=== get_feeds(limit=%d) ===" % limit)
         try:
-            feeds = await platform.get_feeds(limit=limit)
+            feeds = await get_feeds(browser, limit=limit)
             print("拿到 %d 条 feed" % len(feeds))
             for i, p in enumerate(feeds, 1):
                 print("  [%d] %s | 作者:%s | 赞:%s" % (i, p.title or "(无标题)", p.author, p.likes))
@@ -40,11 +48,11 @@ async def test_get_feeds(headless: bool = False, limit: int = 5) -> None:
 
 async def test_get_mentions(headless: bool = False, limit: int = 5) -> None:
     """只测试 get_mentions（@人/提及消息列表）。"""
-    browser, platform = _make_platform(headless)
+    browser = _make_browser(headless)
     async with browser:
         print("=== get_mentions(limit=%d) ===" % limit)
         try:
-            mentions = await platform.get_mentions(limit=limit)
+            mentions = await get_mentions(browser, limit=limit)
             print("拿到 %d 条提及消息" % len(mentions))
             for i, m in enumerate(mentions, 1):
                 msg_id = m.get("id") or m.get("msgId") or m.get("messageId") or "(无id)"
@@ -62,18 +70,18 @@ async def test_get_mentions(headless: bool = False, limit: int = 5) -> None:
 
 
 async def test_search(headless: bool = False, keyword: str = "美食", limit: int = 5) -> None:
-    """只测试 search."""
-    browser, platform = _make_platform(headless)
+    """只测试 search。"""
+    browser = _make_browser(headless)
     async with browser:
         print("=== search(%r, limit=%d) ===" % (keyword, limit))
         try:
-            results = await platform.search(keyword, limit=limit)
+            results = await search_feeds(browser, keyword, limit=limit)
             print("搜索到 %d 条" % len(results))
             for i, p in enumerate(results, 1):
-                print("  [%d] %s | 作者:%s | 赞:%s" % (i, p.title or "(无标题)", p.author, p.likes))
-                print("  xsec_token:", p.xsec_token)
-                print("  post_id:", p.id)
-                print("  author id", p.author_id)
+                print("  [%d] %s | 作者:%s | 赞:%s 评论:%s" % (i, p.title or "(无标题)", p.author, p.likes, p.comments_count))
+                print(f"  xsec_token: {p.xsec_token}. post id: {p.id}  " )
+                print("  content", p.content)
+            
         except Exception as e:
             print("search 出错:", e)
     print("search 跑完.\n")
@@ -83,18 +91,16 @@ async def test_get_post_detail(
     headless: bool = False,
     post_id: str = "",
     xsec_token: str = "",
-    load_all_comments: bool = False,
 ) -> None:
-    """测试 get_post_detail：直接传入 post_id 和 xsec_token 拉详情."""
+    """测试 get_post_detail：直接传入 post_id 和 xsec_token 拉详情。"""
     if not post_id or not xsec_token:
         print("请提供 --post-id 和 --xsec-token，跳过 get_post_detail")
         return
-    browser, platform = _make_platform(headless)
+    browser = _make_browser(headless)
     async with browser:
-        print("=== get_post_detail(post_id=%s, load_all_comments=%s) ===" % (post_id, load_all_comments))
         try:
-            post = await platform.get_post_detail(
-                post_id, xsec_token, load_all_comments=load_all_comments
+            post = await get_post_detail(
+                browser, post_id, xsec_token
             )
             if post:
                 print("详情: title=%s | 作者=%s | 赞=%s | 评论数=%s" % (
@@ -109,21 +115,49 @@ async def test_get_post_detail(
     print("get_post_detail 跑完.\n")
 
 
+async def test_get_feed_comments(
+    headless: bool = False,
+    post_id: str = "",
+    xsec_token: str = "",
+    max_count: int = 20,
+) -> None:
+    """测试 get_feed_comments：打开笔记详情页、滚动加载评论，只返回 comments。"""
+    if not post_id or not xsec_token:
+        print("请提供 --post-id 和 --xsec-token，跳过 get_feed_comments")
+        return
+    browser = _make_browser(headless)
+    async with browser:
+        page = await browser.new_page()
+        try:
+            print("=== get_feed_comments(post_id=%s) ===" % post_id)
+            comments = await feed_detail.get_feed_comments(
+                page, post_id, xsec_token, page_ready=False, max_count=max_count,
+            )
+            for comment in comments:
+                print(comment.content)
+
+        except Exception as e:
+            print("get_feed_comments 出错:", e)
+        finally:
+            await page.close()
+    print("get_feed_comments 跑完.\n")
+
+
 async def test_comment(
     headless: bool = False,
     post_id: str = "",
     xsec_token: str = "",
     content: str = "测试评论，请忽略",
 ) -> None:
-    """测试 comment：发表评论到指定笔记."""
+    """测试 comment：发表评论到指定笔记。"""
     if not post_id or not xsec_token:
         print("请提供 --post-id 和 --xsec-token，跳过 comment")
         return
-    browser, platform = _make_platform(headless)
+    browser = _make_browser(headless)
     async with browser:
         print("=== comment(post_id=%s, content=%r) ===" % (post_id, content))
         try:
-            ok = await platform.comment(post_id, content, xsec_token=xsec_token)
+            ok = await post_comment(browser, post_id, content, xsec_token)
             print("comment 结果: %s" % ("成功" if ok else "失败"))
         except Exception as e:
             print("comment 出错:", e)
@@ -137,15 +171,15 @@ async def test_reply(
     comment_id: str = "",
     content: str = "测试回复，请忽略",
 ) -> None:
-    """测试 reply：回复指定评论."""
+    """测试 reply：回复指定评论。"""
     if not post_id or not xsec_token or not comment_id:
         print("请提供 --post-id、--xsec-token 和 --comment-id，跳过 reply")
         return
-    browser, platform = _make_platform(headless)
+    browser = _make_browser(headless)
     async with browser:
         print("=== reply(post_id=%s, comment_id=%s, content=%r) ===" % (post_id, comment_id, content))
         try:
-            ok = await platform.reply(post_id, comment_id, content, xsec_token=xsec_token)
+            ok = await reply_comment(browser, post_id, comment_id, content, xsec_token)
             print("reply 结果: %s" % ("成功" if ok else "失败"))
         except Exception as e:
             print("reply 出错:", e)
@@ -157,15 +191,15 @@ async def test_get_user_profile(
     user_id: str = "",
     xsec_token: str = "",
 ) -> None:
-    """测试 get_user_profile：获取用户主页信息，需要 user_id 和 xsec_token（可从 search 结果中的 author 对应帖子获取）."""
+    """测试 get_user_profile：获取用户主页信息，需要 user_id 和 xsec_token。"""
     if not user_id or not xsec_token:
         print("请提供 --user-id 和 --xsec-token，跳过 get_user_profile")
         return
-    browser, platform = _make_platform(headless)
+    browser = _make_browser(headless)
     async with browser:
         print("=== get_user_profile(user_id=%s) ===" % user_id)
         try:
-            profile = await platform.get_user_profile(user_id, xsec_token=xsec_token)
+            profile = await get_user_profile(browser, user_id, xsec_token)
             if profile:
                 print("用户: nickname=%s | bio=%s | 粉丝=%s | 关注=%s | 获赞=%s" % (
                     profile.nickname,
@@ -188,18 +222,18 @@ async def test_publish(
     images: list[str] | None = None,
     tags: list[str] | None = None,
 ) -> None:
-    """测试 publish：发布图文笔记."""
+    """测试 publish：发布图文笔记。"""
     images = images or []
     tags = tags or ["测试"]
     if not images:
         print("请提供 --images（至少一张图片路径），跳过 publish")
         return
-    browser, platform = _make_platform(headless)
+    browser = _make_browser(headless)
     async with browser:
         pub = PublishContent(title=title, content=content, images=images, tags=tags)
         print("=== publish(title=%r, images=%s) ===" % (title, images))
         try:
-            result = await platform.publish(pub)
+            result = await publish_content(browser, pub)
             print("publish 结果: %s" % (result if result else "失败"))
         except Exception as e:
             print("publish 出错:", e)
@@ -211,9 +245,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--test",
-        choices=["get_feeds", "get_mentions", "search", "get_post_detail", "get_user_profile", "comment", "reply", "publish"],
+        choices=["get_feeds", "get_mentions", "search", "get_post_detail", "get_feed_comments", "get_user_profile", "comment", "reply", "publish"],
         default=None,
-        help="只跑 get_feeds / get_mentions / search / get_post_detail / get_user_profile / comment / reply / publish；不传则全跑",
+        help="只跑 get_feeds / get_mentions / search / get_post_detail / get_feed_comments / get_user_profile / comment / reply / publish；不传则全跑",
     )
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--limit", type=int, default=5, help="条数，默认 5")
@@ -250,7 +284,12 @@ if __name__ == "__main__":
                 headless=args.headless,
                 post_id=args.post_id,
                 xsec_token=args.xsec_token,
-                load_all_comments=args.load_all_comments,
+            )
+        if args.test is None or args.test == "get_feed_comments":
+            await test_get_feed_comments(
+                headless=args.headless,
+                post_id=args.post_id,
+                xsec_token=args.xsec_token,
             )
         if args.test is None or args.test == "get_user_profile":
             await test_get_user_profile(

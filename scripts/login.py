@@ -9,10 +9,10 @@ import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.core.browser_manager import BrowserManager
-from src.platforms.xiaohongshu import XiaohongshuPlatform
+from src.xiaohongshu import login_xiaohongshu
 
 
-async def login_xiaohongshu(headless: bool = False) -> None:
+async def do_login(headless: bool = False) -> None:
     """Open Xiaohongshu login page, wait for manual login, save cookies."""
     root = Path(__file__).resolve().parent.parent
     data_dir = root / "data"
@@ -23,11 +23,10 @@ async def login_xiaohongshu(headless: bool = False) -> None:
         headless=headless,
         cookies_path=cookies_path,
     )
-    platform = XiaohongshuPlatform(browser, cookies_path=cookies_path)
 
     async with browser:
         print("正在打开小红书首页... 未登录时将显示二维码，请扫码完成登录。")
-        success = await platform.login(headless=headless)
+        success = await login_xiaohongshu(browser, headless=headless, cookies_path=cookies_path)
         if success:
             print("登录成功！Cookies 已保存到:", cookies_path)
         else:
@@ -50,7 +49,7 @@ def main():
     args = parser.parse_args()
 
     if args.platform == "xiaohongshu":
-        asyncio.run(login_xiaohongshu(headless=args.headless))
+        asyncio.run(do_login(headless=args.headless))
     else:
         print("暂不支持该平台")
 

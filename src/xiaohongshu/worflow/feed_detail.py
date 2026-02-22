@@ -8,9 +8,11 @@ import logging
 import random
 import re
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from playwright.async_api import ElementHandle, Page
+
+from src.core.models import Comment, CommentUserInfo
 
 logger = logging.getLogger(__name__)
 
@@ -532,41 +534,16 @@ async def _extract_feed_detail(page: Page, feed_id: str) -> Optional[dict[str, A
     }
 
 
-# ========== 主入口 ==========
+# ========== 页面打开（复用）==========
 
 
-async def get_feed_detail(
-    page: Page,
-    feed_id: str,
-    xsec_token: str,
-    load_all_comments: bool = False,
-    config: Optional[CommentLoadConfig] = None,
-) -> Optional[dict[str, Any]]:
-    """打开笔记详情页，可选加载全部评论，并提取 note + comments（与 Go GetFeedDetailWithConfig 一致）.
-
-    Args:
-        page: Playwright 页面。
-        feed_id: 笔记 ID。
-        xsec_token: 访问令牌。
-        load_all_comments: 是否滚动加载全部评论。
-        config: 评论加载配置，默认使用 default_comment_load_config()。
-
-    Returns:
-        包含 "note" 和 "comments" 的字典；失败返回 None。
-    """
+async def _open_feed_detail_page(
+    page: Page, feed_id: str, xsec_token: str
+) -> bool:
+    """打开笔记详情页并检查可访问性。成功返回 True，失败返回 False."""
     page.set_default_timeout(FEED_DETAIL_PAGE_TIMEOUT_MS)
     url = make_feed_detail_url(feed_id, xsec_token)
-    cfg = config or default_comment_load_config()
-
     print("打开 feed 详情页: %s", url)
-    print(
-        "配置: 点击更多=%s, 回复阈值=%d, 最大评论数=%d, 滚动速度=%s",
-        cfg.click_more_replies,
-        cfg.max_replies_threshold,
-        cfg.max_comment_items,
-        cfg.scroll_speed,
-    )
-
     for attempt in range(3):
         try:
             await page.goto(url, wait_until="domcontentloaded", timeout=FEED_DETAIL_PAGE_TIMEOUT_MS)
@@ -577,19 +554,115 @@ async def get_feed_detail(
             await asyncio.sleep(0.5 + random.random())
     else:
         logger.error("页面导航失败")
-        return None
-
+        return False
     await _sleep_random(1000, 2000)
-
     err = await _check_page_accessible(page)
     if err:
         logger.warning("页面不可访问: %s", err)
+        return False
+    return True
+
+
+# ========== 主入口 ==========
+
+
+async def get_feed_detail(
+    page: Page,
+    feed_id: str,
+    xsec_token: str,
+) -> Optional[dict[str, Any]]:
+    """打开笔记详情页并提取 note。不加载评论。
+
+    Args:
+        page: Playwright 页面。
+        feed_id: 笔记 ID。
+        xsec_token: 访问令牌。
+
+    Returns:
+        笔记详情 dict（note）；失败返回 None。
+    """
+    if not await _open_feed_detail_page(page, feed_id, xsec_token):
         return None
+    data = await _extract_feed_detail(page, feed_id)
+    return data.get("note", {}) if data else None
 
-    if load_all_comments:
-        try:
-            await _load_all_comments_with_config(page, cfg)
-        except Exception as e:
-            logger.warning("加载全部评论失败: %s", e)
 
-    return await _extract_feed_detail(page, feed_id)
+def _raw_comment_to_model(raw: dict[str, Any]) -> Comment:
+    """将原始评论 dict 转为 Comment 模型，仅保留 Comment 定义的字段。"""
+    like_count = raw.get("likeCount", 0)
+    if isinstance(like_count, str):
+        like_count = int(like_count) if like_count else 0
+    sub_count = raw.get("subCommentCount", 0)
+    if isinstance(sub_count, str):
+        sub_count = int(sub_count) if sub_count else 0
+    ui = raw.get("userInfo") or {}
+    user_info = CommentUserInfo(
+        userId=ui.get("userId", ""),
+        nickname=ui.get("nickname", ""),
+        xsecToken=ui.get("xsecToken", ""),
+    )
+    return Comment(
+        id=raw["id"],
+        noteId=raw.get("noteId", ""),
+        content=raw.get("content", ""),
+        createTime=raw.get("createTime", 0),
+        likeCount=like_count,
+        liked=raw.get("liked", False),
+        subCommentCount=sub_count,
+        showTags=raw.get("showTags", []) or [],
+        userInfo=user_info,
+    )
+
+
+def _raw_comments_to_models(raw_list: list) -> List[Comment]:
+    """将原始评论列表转为 Comment 模型列表（含子评论）。"""
+    result: List[Comment] = []
+    for item in raw_list:
+        result.append(_raw_comment_to_model(item))
+        for sub in item.get("subComments") or []:
+            result.append(_raw_comment_to_model(sub))
+    return result
+
+
+async def get_feed_comments(
+    page: Page,
+    feed_id: str,
+    xsec_token: str,
+    max_count: int = 20,
+    *,
+    page_ready: bool = False,
+    config: Optional[CommentLoadConfig] = None,
+) -> Optional[List[Comment]]:
+    """打开笔记详情页（可选），滚动加载全部评论，返回 comments。
+
+    Args:
+        page: Playwright 页面。
+        feed_id: 笔记 ID。
+        xsec_token: 访问令牌。
+        page_ready: 若 True，跳过导航，假定页面已在 feed 详情页。
+        config: 评论加载配置，默认使用 default_comment_load_config()。
+
+    Returns:
+        Comment 模型列表（含子评论）；失败返回 None。
+    """
+    if not page_ready:
+        if not await _open_feed_detail_page(page, feed_id, xsec_token):
+            return None
+    cfg = config or default_comment_load_config()
+    cfg.max_comment_items = min(max_count, cfg.max_comment_items)
+    print(
+        "配置: 点击更多=%s, 回复阈值=%d, 最大评论数=%d, 滚动速度=%s",
+        cfg.click_more_replies,
+        cfg.max_replies_threshold,
+        cfg.max_comment_items,
+        cfg.scroll_speed,
+    )
+    try:
+        await _load_all_comments_with_config(page, cfg)
+    except Exception as e:
+        logger.warning("加载全部评论失败: %s", e)
+    data = await _extract_feed_detail(page, feed_id)
+    raw_list = data.get("comments", {}).get("list")
+    if not raw_list:
+        return None
+    return _raw_comments_to_models(raw_list)

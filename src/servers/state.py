@@ -1,19 +1,18 @@
-"""Shared state for HTTP and MCP servers (single browser + platform instance)."""
-from typing import TYPE_CHECKING, Optional
+"""Shared state for HTTP and MCP servers (browser instance)."""
+from typing import Optional
 
-if TYPE_CHECKING:
-    from src.platforms.base import PlatformBase
+from src.core.browser_manager import BrowserManager
 
-# Global platform instance, set by server lifespan
-_platform: Optional["PlatformBase"] = None
-
-
-def get_platform() -> "PlatformBase":
-    if _platform is None:
-        raise RuntimeError("Platform not initialized. Start the server first.")
-    return _platform
+# 全局 browser 实例，由 server lifespan 设置
+_browser: Optional[BrowserManager] = None
 
 
-def set_platform(platform: Optional["PlatformBase"]) -> None:
-    global _platform
-    _platform = platform
+def get_browser() -> BrowserManager:
+    if _browser is None:
+        raise RuntimeError("Browser not initialized. Start the server first.")
+    return _browser
+
+
+def set_browser(browser: Optional[BrowserManager]) -> None:
+    global _browser
+    _browser = browser
