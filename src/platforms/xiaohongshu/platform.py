@@ -13,6 +13,7 @@ from src.platforms.xiaohongshu.worflow import (
     feed_detail,
     feeds,
     login,
+    memtions,
     publish,
     search,
     user_profile,
@@ -119,6 +120,14 @@ class XiaohongshuPlatform(PlatformBase):
                 page, keyword=keyword, limit=limit
             )
             return [self._feed_dict_to_post(item) for item in raw_list]
+        finally:
+            await page.close()
+
+    async def get_mentions(self, limit: int = 20) -> list[dict[str, Any]]:
+        """获取 @人/提及 消息列表，从消息通知页 __INITIAL_STATE__.notification 拉取。"""
+        page = await self.browser.new_page()
+        try:
+            return await memtions.get_mention_list(page, limit=limit)
         finally:
             await page.close()
 

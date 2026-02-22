@@ -28,7 +28,7 @@
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │                      Platform Adapters / 平台适配层                    │
-│  XiaohongshuPlatform | TwitterPlatform | LinkedInPlatform             │
+│  XiaohongshuPlatform (小红书)                                               │
 │  统一接口: login, check_login, get_feeds, search, get_post_detail,    │
 │           publish, comment, reply                                    │
 └─────────────────────────────────────────────────────────────────────┘

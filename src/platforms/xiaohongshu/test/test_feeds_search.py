@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""简单脚本：测试 XiaohongshuPlatform 的 get_feeds 和 search，跑通即可."""
+"""简单脚本：测试 XiaohongshuPlatform 的 get_feeds、get_mentions、search 等，跑通即可."""
 import asyncio
 import sys
 from pathlib import Path
@@ -36,6 +36,29 @@ async def test_get_feeds(headless: bool = False, limit: int = 5) -> None:
         except Exception as e:
             print("get_feeds 出错:", e)
     print("get_feeds 跑完.\n")
+
+
+async def test_get_mentions(headless: bool = False, limit: int = 5) -> None:
+    """只测试 get_mentions（@人/提及消息列表）。"""
+    browser, platform = _make_platform(headless)
+    async with browser:
+        print("=== get_mentions(limit=%d) ===" % limit)
+        try:
+            mentions = await platform.get_mentions(limit=limit)
+            print("拿到 %d 条提及消息" % len(mentions))
+            for i, m in enumerate(mentions, 1):
+                msg_id = m.get("id") or m.get("msgId") or m.get("messageId") or "(无id)"
+                msg_type = m.get("msgType") or m.get("type") or ""
+                content = (m.get("commentInfo", {}).get('content'))
+                from_user = m.get("fromUser")
+                from_nick = from_user.get("nickname", "") if isinstance(from_user, dict) else ""
+                note_id = m.get("noteId") or m.get("targetNoteId") or ""
+                print("  [%d] id:%s | type:%s | 来自:%s | 笔记:%s | 内容:%s" % (
+                    i, msg_id, msg_type, from_nick, note_id, content or "(无内容)"
+                ))
+        except Exception as e:
+            print("get_mentions 出错:", e)
+    print("get_mentions 跑完.\n")
 
 
 async def test_search(headless: bool = False, keyword: str = "美食", limit: int = 5) -> None:
@@ -188,9 +211,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--test",
-        choices=["get_feeds", "search", "get_post_detail", "get_user_profile", "comment", "reply", "publish"],
+        choices=["get_feeds", "get_mentions", "search", "get_post_detail", "get_user_profile", "comment", "reply", "publish"],
         default=None,
-        help="只跑 get_feeds / search / get_post_detail / get_user_profile / comment / reply / publish；不传则全跑",
+        help="只跑 get_feeds / get_mentions / search / get_post_detail / get_user_profile / comment / reply / publish；不传则全跑",
     )
     parser.add_argument("--headless", action="store_true", help="无头模式")
     parser.add_argument("--limit", type=int, default=5, help="条数，默认 5")
@@ -218,6 +241,8 @@ if __name__ == "__main__":
     async def run():
         if args.test is None or args.test == "get_feeds":
             await test_get_feeds(headless=args.headless, limit=args.limit)
+        if args.test is None or args.test == "get_mentions":
+            await test_get_mentions(headless=args.headless, limit=args.limit)
         if args.test is None or args.test == "search":
             await test_search(headless=args.headless, keyword=args.keyword, limit=args.limit)
         if args.test is None or args.test == "get_post_detail":

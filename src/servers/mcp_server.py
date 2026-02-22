@@ -70,6 +70,31 @@ async def list_feeds(limit: int = 20) -> str:
 
 
 @mcp.tool()
+async def list_mentions(limit: int = 20) -> str:
+    """获取小红书 @人/提及 消息列表。limit 默认 20。"""
+    platform = _get_platform()
+    mentions = await platform.get_mentions(limit=limit)
+    if not mentions:
+        return "无提及消息"
+    lines = []
+    for i, m in enumerate(mentions, 1):
+        msg_id = m.get("id") or m.get("msgId") or m.get("messageId") or "(无id)"
+        msg_type = m.get("msgType") or m.get("type") or ""
+        content = (m.get("content") or m.get("msg") or "")[:80]
+        from_user = (m.get("fromUser") or {}).get("nickname") if isinstance(m.get("fromUser"), dict) else ""
+        note_id = m.get("noteId") or m.get("targetNoteId") or ""
+        line = f"- {i}. id: {msg_id}, type: {msg_type}"
+        if from_user:
+            line += f", 来自: {from_user}"
+        if note_id:
+            line += f", 笔记id: {note_id}"
+        if content:
+            line += f", 内容: {content}"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+@mcp.tool()
 async def search_feeds(keyword: str, limit: int = 20) -> str:
     """根据关键词搜索小红书内容。"""
     platform = _get_platform()
